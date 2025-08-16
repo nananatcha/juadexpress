@@ -1,644 +1,467 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบรับส่งพัสดุ</title>
-    
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Longdo Map API -->
-    <script src="https://api.longdo.com/map/?key=7fe4440cd70cb6961fe1fbfdcea94610"></script>
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+// === Configuration ===
+const CONFIG = {
+  LIFF_ID: "2007906947-zQ0mRjXg",
+  LONGDO_API_KEY: "7fe4440cd70cb6961fe1fbfdcea94610",
+  GAS_ENDPOINT: "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+};
 
-    <!-- Custom Styles -->
-    <style>
-        /* Use Inter font from Google Fonts */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
-        body {
-            font-family: 'Sarabun', 'Inter', sans-serif;
-            background-color: #f8f9fa;
-        }
-        /* Custom styles for better UX */
-        .form-section {
-            background-color: white;
-            border-radius: 0.75rem;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        .btn-primary {
-            background-color: #06C755; /* LINE Green */
-            color: white;
-            font-weight: 600;
-            border-radius: 0.5rem;
-            padding: 0.75rem 1.5rem;
-            transition: background-color 0.3s;
-        }
-        .btn-primary:hover {
-            background-color: #05a546;
-        }
-        .btn-secondary {
-            background-color: #e9ecef;
-            color: #495057;
-            font-weight: 500;
-            border-radius: 0.5rem;
-            padding: 0.5rem 1rem;
-            transition: background-color 0.3s;
-        }
-        .btn-secondary:hover {
-            background-color: #dee2e6;
-        }
-        .input-field {
-            width: 100%;
-            border: 1px solid #ced4da;
-            border-radius: 0.5rem;
-            padding: 0.75rem;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .input-field:focus {
-            outline: none;
-            border-color: #06C755;
-            box-shadow: 0 0 0 2px rgba(6, 199, 85, 0.2);
-        }
-        /* Modal styles */
-        #mapModal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal-content {
-            position: relative;
-            background-color: #fefefe;
-            margin: auto;
-            border-radius: 0.5rem;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        #map {
-            flex-grow: 1;
-            width: 100%;
-        }
-        /* Loading overlay */
-        #loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #06C755;
-            animation: spin 1s ease infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+// === Utilities ===
+const loadScript = (src) =>
+  new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
 
-        /* Notification Modal */
-        #notification-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 10000;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
-        }
-        #notification-modal.show {
-            opacity: 1;
-            visibility: visible;
-        }
-        .notification-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 0.75rem;
-            text-align: center;
-            max-width: 90%;
-            width: 350px;
-            box-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-        }
-        .notification-content .icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .notification-content .icon.success { color: #10B981; }
-        .notification-content .icon.error { color: #EF4444; }
-    </style>
-</head>
-<body class="bg-gray-50">
+const toLongdoLink = (lat, lon) => `https://map.longdo.com/p/${lat},${lon}`;
 
-    <div id="loading-overlay" class="hidden">
-        <div class="spinner"></div>
-    </div>
+const haversineKm = (a, b) => {
+  if (!a || !b) return 0;
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLon = Math.sin(dLon / 2);
+  const x = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * y;
+};
 
-    <div class="container mx-auto max-w-lg p-4">
-        <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">สร้างรายการส่งพัสดุ</h1>
-            <p class="text-gray-500 mt-1">กรุณากรอกข้อมูลให้ครบถ้วน</p>
-        </header>
+// Fare rule:
+// 0-5 km => flat 30 THB
+// >5 to 12 km => +5 THB per km
+// 13th km => +10 THB
+// 14 km and beyond => +15 THB per km (from km 14 onward)
+const calcFare = (kmFloat) => {
+  const km = Math.ceil(kmFloat || 0);
+  if (km <= 5) return 30;
+  let fare = 30;
+  const upTo12 = Math.min(km, 12);
+  if (upTo12 > 5) fare += (upTo12 - 5) * 5; // km 6-12
+  if (km >= 13) fare += 10; // km 13
+  if (km >= 14) fare += (km - 13) * 15; // km 14+
+  return fare;
+};
 
-        <form id="deliveryForm">
-            <!-- Origin Section -->
-            <div class="form-section">
-                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
-                    <i class="fas fa-box-open mr-3 text-green-500"></i>ข้อมูลต้นทาง
-                </h2>
-                <div class="space-y-4">
-                    <div>
-                        <label for="senderName" class="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้ส่ง</label>
-                        <input type="text" id="senderName" class="input-field bg-gray-100" readonly>
-                    </div>
-                    <div>
-                        <label for="senderPhone" class="block text-sm font-medium text-gray-600 mb-1">เบอร์ติดต่อ</label>
-                        <input type="tel" id="senderPhone" class="input-field" placeholder="กรอกเบอร์โทรศัพท์" required>
-                    </div>
-                    <div>
-                        <label for="pickupTime" class="block text-sm font-medium text-gray-600 mb-1">เวลานัดรับ</label>
-                        <input type="datetime-local" id="pickupTime" class="input-field" required>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-600 mb-2">แผนที่ต้นทาง</label>
-                        <div class="flex space-x-2">
-                            <button type="button" id="currentLocationBtn" class="btn-secondary w-full flex items-center justify-center"><i class="fas fa-location-arrow mr-2"></i>ตำแหน่งปัจจุบัน</button>
-                            <button type="button" id="originMapBtn" class="btn-secondary w-full flex items-center justify-center"><i class="fas fa-map-marked-alt mr-2"></i>เลือกจากแผนที่</button>
-                        </div>
-                        <div id="originAddress" class="mt-3 p-3 bg-gray-50 border rounded-lg text-gray-600 text-sm min-h-[40px]">
-                            ยังไม่ได้เลือกตำแหน่ง
-                        </div>
-                        <input type="hidden" id="originCoords">
-                    </div>
-                </div>
-            </div>
+const Input = (props) => (
+  <input
+    {...props}
+    className={
+      "w-full rounded-2xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-black " +
+      (props.className || "")
+    }
+  />
+);
 
-            <!-- Destinations Section -->
-            <div id="destinations-container">
-                <!-- Destination items will be injected here -->
-            </div>
+const Label = ({ children }) => (
+  <label className="block text-sm font-medium text-gray-700 mb-1">{children}</label>
+);
 
-            <button type="button" id="addDestinationBtn" class="w-full py-3 mb-6 border-2 border-dashed border-green-400 text-green-600 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center justify-center">
-                <i class="fas fa-plus-circle mr-2"></i>เพิ่มปลายทาง
+const Card = ({ children, className }) => (
+  <div className={`rounded-2xl bg-white shadow-sm border border-gray-100 p-4 ${className || ""}`}>{children}</div>
+);
+
+const SectionTitle = ({ children }) => (
+  <h2 className="text-lg font-semibold text-gray-900 mb-3">{children}</h2>
+);
+
+const IconButton = ({ children, onClick, type = "button" }) => (
+  <button
+    type={type}
+    onClick={onClick}
+    className="rounded-xl border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 active:scale-[0.99]"
+  >
+    {children}
+  </button>
+);
+
+// === Map Picker (Longdo) ===
+const MapPicker = ({ open, onClose, onPick, initial }) => {
+  const containerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const init = async () => {
+      await loadScript(`https://api.longdo.com/map/?key=${CONFIG.LONGDO_API_KEY}`);
+      // eslint-disable-next-line no-undef
+      const map = new window.longdo.Map({
+        placeholder: containerRef.current,
+        language: 'th',
+      });
+      mapRef.current = map;
+      // eslint-disable-next-line no-undef
+      const longdo = window.longdo;
+
+      const center = initial?.lat ? { lon: initial.lon, lat: initial.lat } : { lon: 100.5018, lat: 13.7563 };
+      map.location(center, true);
+      markerRef.current = new longdo.Marker(center);
+      map.Overlays.add(markerRef.current);
+
+      map.Event.bind('click', function () {
+        const loc = map.location();
+        if (markerRef.current) map.Overlays.remove(markerRef.current);
+        markerRef.current = new longdo.Marker(loc);
+        map.Overlays.add(markerRef.current);
+      });
+    };
+    init();
+    return () => {
+      // no explicit destroy needed in Longdo
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="w-full max-w-md rounded-2xl bg-white p-3 shadow-xl">
+        <div ref={containerRef} className="h-80 w-full rounded-xl bg-gray-100" />
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <IconButton onClick={onClose}>ยกเลิก</IconButton>
+          <div className="flex gap-2">
+            <IconButton
+              onClick={() => {
+                if (!navigator.geolocation || !mapRef.current) return;
+                navigator.geolocation.getCurrentPosition((pos) => {
+                  const { latitude: lat, longitude: lon } = pos.coords;
+                  mapRef.current.location({ lat, lon }, true);
+                });
+              }}
+            >
+              ตำแหน่งปัจจุบัน
+            </IconButton>
+            <button
+              className="rounded-xl bg-black px-4 py-2 text-white"
+              onClick={() => {
+                const loc = mapRef.current?.location();
+                if (!loc) return;
+                onPick({ lat: loc.lat, lon: loc.lon });
+              }}
+            >
+              ใช้ตำแหน่งนี้
             </button>
-
-            <!-- Summary Section -->
-            <div class="form-section">
-                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
-                    <i class="fas fa-receipt mr-3 text-green-500"></i>สรุปข้อมูล
-                </h2>
-                <div class="space-y-2 text-gray-700">
-                    <div class="flex justify-between">
-                        <span>ระยะทางรวม:</span>
-                        <span id="totalDistance" class="font-semibold">0.00 กม.</span>
-                    </div>
-                    <div class="flex justify-between text-xl">
-                        <span class="font-semibold">ค่าบริการ (โดยประมาณ):</span>
-                        <span id="shippingFee" class="font-bold text-green-600">฿0.00</span>
-                    </div>
-                </div>
-            </div>
-
-            <button type="submit" class="btn-primary w-full text-lg">
-                ยืนยันและสร้างรายการ
-            </button>
-        </form>
-    </div>
-
-    <!-- Map Modal -->
-    <div id="mapModal">
-        <div class="modal-content">
-            <div class="p-4 bg-white border-b flex items-center">
-                <input type="text" id="mapSearch" class="input-field" placeholder="ค้นหาสถานที่...">
-                <button type="button" id="closeMapBtn" class="ml-2 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-            </div>
-            <div id="map"></div>
-            <div class="p-4 bg-white border-t">
-                <div id="selectedMapAddress" class="mb-3 p-2 bg-gray-100 rounded-md text-sm text-gray-700">กรุณาปักหมุดบนแผนที่</div>
-                <button type="button" id="confirmLocationBtn" class="btn-primary w-full">ยืนยันตำแหน่งนี้</button>
-            </div>
+          </div>
         </div>
+      </div>
     </div>
+  );
+};
 
-    <!-- Notification Modal -->
-    <div id="notification-modal">
-        <div class="notification-content">
-            <div id="notification-icon" class="icon"></div>
-            <p id="notification-message" class="text-gray-700 mb-4"></p>
-            <button id="notification-close-btn" class="btn-primary">ตกลง</button>
+// === Destination Row ===
+const DestinationRow = ({ idx, dest, onChange, onRemove, onPickMap }) => {
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold">ปลายทาง #{idx + 1}</div>
+        <IconButton onClick={() => onRemove(dest.id)}>ลบ</IconButton>
+      </div>
+      <div className="grid grid-cols-1 gap-3">
+        <div>
+          <Label>ชื่อผู้รับ</Label>
+          <Input
+            placeholder="เช่น คุณเอ"
+            value={dest.name}
+            onChange={(e) => onChange(dest.id, { name: e.target.value })}
+          />
         </div>
-    </div>
+        <div>
+          <Label>เบอร์ติดต่อ</Label>
+          <Input
+            placeholder="08xxxxxxxx"
+            value={dest.phone}
+            onChange={(e) => onChange(dest.id, { phone: e.target.value })}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>แผนที่ปลายทาง</Label>
+          <div className="flex gap-2">
+            <IconButton onClick={() => onPickMap(dest.id)}>เลือกจากแผนที่</IconButton>
+            <Input
+              placeholder="วางลิงก์ Longdo Map ได้ เช่น https://map.longdo.com/p/13.7,100.5"
+              value={dest.mapLink || ""}
+              onChange={(e) => onChange(dest.id, { mapLink: e.target.value })}
+            />
+          </div>
+          {dest.location ? (
+            <div className="text-sm text-gray-600">
+              lat: {dest.location.lat.toFixed(6)}, lon: {dest.location.lon.toFixed(6)}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400">ยังไม่ระบุตำแหน่ง</div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+};
 
+// === Main App ===
+export default function App() {
+  // LIFF profile
+  const [liffReady, setLiffReady] = useState(false);
+  const [profileName, setProfileName] = useState("");
 
-    <!-- LIFF SDK -->
-    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script>
-        // --- CONFIGURATION ---
-        // TODO: กรุณาใส่ค่าจริงของคุณที่นี่
-        const LIFF_ID = "2007906947-zQ0mRjXg"; 
-        const LONGDO_MAP_API_KEY = document.querySelector('script[src*="longdo.com"]').src.split('key=')[1];
-        const GAS_WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
+  // Origin
+  const [senderName, setSenderName] = useState("");
+  const [senderPhone, setSenderPhone] = useState("");
+  const [pickupAt, setPickupAt] = useState("");
+  const [origin, setOrigin] = useState({ location: null, mapLink: "" });
 
-        // --- DOM ELEMENTS ---
-        const form = document.getElementById('deliveryForm');
-        const senderNameInput = document.getElementById('senderName');
-        const pickupTimeInput = document.getElementById('pickupTime');
-        const addDestinationBtn = document.getElementById('addDestinationBtn');
-        const destinationsContainer = document.getElementById('destinations-container');
-        const totalDistanceEl = document.getElementById('totalDistance');
-        const shippingFeeEl = document.getElementById('shippingFee');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        
-        // Map Modal Elements
-        const mapModal = document.getElementById('mapModal');
-        const mapSearchInput = document.getElementById('mapSearch');
-        const closeMapBtn = document.getElementById('closeMapBtn');
-        const confirmLocationBtn = document.getElementById('confirmLocationBtn');
-        const selectedMapAddressEl = document.getElementById('selectedMapAddress');
+  // Destinations
+  const [destinations, setDestinations] = useState([]);
 
-        // Notification Modal Elements
-        const notificationModal = document.getElementById('notification-modal');
-        const notificationIcon = document.getElementById('notification-icon');
-        const notificationMessage = document.getElementById('notification-message');
-        const notificationCloseBtn = document.getElementById('notification-close-btn');
+  // Modals
+  const [mapModal, setMapModal] = useState({ open: false, target: null }); // target: 'origin' | destId
 
-        // --- STATE VARIABLES ---
-        let destinationCounter = 0;
-        let map;
-        let currentMapTarget = null; // e.g., 'origin', 'destination-1'
-        let selectedLocation = null; // { lat, lon, address }
+  const parseLongdoLink = (link) => {
+    try {
+      if (!link) return null;
+      const url = new URL(link);
+      const parts = url.pathname.split("/");
+      const last = parts.pop() || parts.pop();
+      if (!last) return null;
+      const [latStr, lonStr] = last.split(",");
+      const lat = parseFloat(latStr);
+      const lon = parseFloat(lonStr);
+      if (isFinite(lat) && isFinite(lon)) return { lat, lon };
+      return null;
+    } catch (_) {
+      return null;
+    }
+  };
 
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', initializeApp);
+  // Init LIFF
+  useEffect(() => {
+    const boot = async () => {
+      if (!CONFIG.LIFF_ID || CONFIG.LIFF_ID === "YOUR_LIFF_ID") return; // skip if not configured
+      await loadScript("https://static.line-scdn.net/liff/edge/versions/2.22.4/sdk.js");
+      // eslint-disable-next-line no-undef
+      await window.liff.init({ liffId: CONFIG.LIFF_ID });
+      setLiffReady(true);
+      try {
+        // eslint-disable-next-line no-undef
+        const profile = await window.liff.getProfile();
+        setProfileName(profile.displayName || "");
+        setSenderName(profile.displayName || "");
+      } catch (_) {}
+    };
+    boot();
+  }, []);
 
-        async function initializeApp() {
-            showLoading(true);
-            try {
-                // Check for placeholder values before initializing
-                if (LIFF_ID === "YOUR_LIFF_ID") {
-                    throw new Error("Config Error: กรุณาใส่ LIFF ID ของคุณในโค้ด");
-                }
-                if (LONGDO_MAP_API_KEY === "YOUR_LONGDO_MAP_API_KEY") {
-                    throw new Error("Config Error: กรุณาใส่ Longdo Map API Key ของคุณในโค้ด");
-                }
+  // When user pastes Longdo link into origin or destinations, parse to location
+  useEffect(() => {
+    const loc = parseLongdoLink(origin.mapLink);
+    if (loc) setOrigin((o) => ({ ...o, location: loc }));
+  }, [origin.mapLink]);
 
-                await liff.init({ liffId: LIFF_ID });
-                
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return; // Stop execution until login completes and page reloads
-                }
+  const updateDest = (id, patch) => {
+    setDestinations((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, ...patch, ...(patch.mapLink ? { location: parseLongdoLink(patch.mapLink) || d.location } : {}) } : d))
+    );
+  };
 
-                // This code runs only after successful login
-                const profile = await liff.getProfile();
-                senderNameInput.value = profile.displayName;
-                
-                setupEventListeners();
-                addDestination(); // Add the first destination by default
-                setDefaultPickupTime();
-                showLoading(false); // Hide loading only on full success
+  const addDest = () => {
+    setDestinations((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), name: "", phone: "", location: null, mapLink: "" },
+    ]);
+  };
 
-            } catch (error) {
-                console.error("Initialization failed", error);
-                let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
-                if (error.message.includes("Config Error")) {
-                    errorMessage = error.message.replace("Config Error: ", "");
-                } else if (error.toString().includes("channel not found")) {
-                    errorMessage = "เกิดข้อผิดพลาด: ไม่พบ LIFF Channel ID ของคุณ กรุณาตรวจสอบค่า LIFF_ID ให้ถูกต้อง";
-                }
-                showMessage(errorMessage, true);
-                showLoading(false); // Hide loading on error
-            }
-        }
+  const removeDest = (id) => setDestinations((prev) => prev.filter((d) => d.id !== id));
 
-        function setDefaultPickupTime() {
-            const now = new Date();
-            now.setHours(now.getHours() + 1); // Add 1 hour to current time
-            const year = now.getFullYear();
-            const month = (now.getMonth() + 1).toString().padStart(2, '0');
-            const day = now.getDate().toString().padStart(2, '0');
-            const hours = now.getHours().toString().padStart(2, '0');
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            pickupTimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-        }
+  const allItems = useMemo(() => {
+    return destinations.map((d) => ({ id: d.id, location: d.location }));
+  }, [destinations]);
 
-        // --- EVENT LISTENERS ---
-        function setupEventListeners() {
-            addDestinationBtn.addEventListener('click', addDestination);
-            form.addEventListener('submit', handleFormSubmit);
+  const perRoute = useMemo(() => {
+    if (!origin.location) return [];
+    return destinations.map((d) => {
+      const km = d.location ? haversineKm(origin.location, d.location) : 0;
+      const fare = d.location ? calcFare(km) : 0;
+      return { id: d.id, km, fare };
+    });
+  }, [origin.location, destinations]);
 
-            document.getElementById('currentLocationBtn').addEventListener('click', getCurrentLocation);
-            document.getElementById('originMapBtn').addEventListener('click', () => openMapModal('origin'));
+  const totalFare = perRoute.reduce((s, r) => s + r.fare, 0);
 
-            closeMapBtn.addEventListener('click', closeMapModal);
-            confirmLocationBtn.addEventListener('click', confirmLocation);
-            mapSearchInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    searchMap();
-                }
-            });
-            notificationCloseBtn.addEventListener('click', () => notificationModal.classList.remove('show'));
-        }
+  const handlePick = (coords) => {
+    if (mapModal.target === "origin") {
+      setOrigin((o) => ({ ...o, location: coords, mapLink: toLongdoLink(coords.lat, coords.lon) }));
+    } else {
+      setDestinations((prev) => prev.map((d) => (d.id === mapModal.target ? { ...d, location: coords, mapLink: toLongdoLink(coords.lat, coords.lon) } : d)));
+    }
+    setMapModal({ open: false, target: null });
+  };
 
-        // --- DESTINATION MANAGEMENT ---
-        function addDestination() {
-            destinationCounter++;
-            const id = `destination-${destinationCounter}`;
-            const destinationHTML = `
-                <div class="form-section" id="${id}">
-                    <div class="flex justify-between items-center border-b pb-2 mb-4">
-                        <h2 class="text-xl font-semibold text-gray-700 flex items-center">
-                            <i class="fas fa-map-marker-alt mr-3 text-red-500"></i>ข้อมูลปลายทาง #${destinationCounter}
-                        </h2>
-                        ${destinationCounter > 1 ? `<button type="button" class="text-red-500 hover:text-red-700 remove-destination-btn" data-target="${id}">&times; ลบ</button>` : ''}
-                    </div>
-                    <div class="space-y-4">
-                        <div>
-                            <label for="recipientName-${id}" class="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้รับ</label>
-                            <input type="text" id="recipientName-${id}" class="input-field" placeholder="กรอกชื่อผู้รับ" required>
-                        </div>
-                        <div>
-                            <label for="recipientPhone-${id}" class="block text-sm font-medium text-gray-600 mb-1">เบอร์ติดต่อผู้รับ</label>
-                            <input type="tel" id="recipientPhone-${id}" class="input-field" placeholder="กรอกเบอร์โทรศัพท์" required>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-600 mb-2">แผนที่ปลายทาง</label>
-                            <button type="button" class="btn-secondary w-full destination-map-btn" data-target="${id}"><i class="fas fa-map-marked-alt mr-2"></i>เลือกจากแผนที่</button>
-                            <div id="address-${id}" class="mt-3 p-3 bg-gray-50 border rounded-lg text-gray-600 text-sm min-h-[40px]">
-                                ยังไม่ได้เลือกตำแหน่ง
-                            </div>
-                            <input type="hidden" id="coords-${id}">
-                        </div>
-                    </div>
-                </div>
-            `;
-            destinationsContainer.insertAdjacentHTML('beforeend', destinationHTML);
-            
-            document.querySelector(`.destination-map-btn[data-target="${id}"]`).addEventListener('click', () => openMapModal(id));
-            if (destinationCounter > 1) {
-                document.querySelector(`.remove-destination-btn[data-target="${id}"]`).addEventListener('click', (e) => removeDestination(e.target.dataset.target));
-            }
-        }
+  const handleSubmit = async () => {
+    const payload = {
+      source: {
+        name: senderName,
+        phone: senderPhone,
+        pickupAt,
+        location: origin.location,
+        mapLink: origin.mapLink,
+      },
+      destinations: destinations.map((d) => ({ id: d.id, name: d.name, phone: d.phone, location: d.location, mapLink: d.mapLink })),
+      pricing: perRoute,
+      totalFare: Math.round(totalFare),
+      createdAt: new Date().toISOString(),
+      meta: { liffReady },
+    };
 
-        function removeDestination(id) {
-            document.getElementById(id).remove();
-            calculateTotal();
-        }
+    const res = await fetch(CONFIG.GAS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-        // --- LOCATION & MAP ---
-        function getCurrentLocation() {
-            showLoading(true);
-            if (!navigator.geolocation) {
-                showMessage("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง", true);
-                showLoading(false);
-                return;
-            }
-            navigator.geolocation.getCurrentPosition(
-                position => {
-                    const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    getAddressFromCoords(coords, (address) => {
-                        updateLocationUI('origin', coords, address);
-                        showLoading(false);
+    if (!res.ok) {
+      alert("ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่");
+      return;
+    }
+    alert("ส่งข้อมูลสำเร็จ");
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto max-w-xl px-4 py-3 flex items-center justify-between">
+          <div className="text-base font-semibold">รับส่งพัสดุ</div>
+          <div className="text-xs text-gray-600">LIFF {liffReady ? "พร้อม" : "รอ"}</div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-xl px-4 py-4 space-y-4">
+        {/* Origin */}
+        <Card className="space-y-4">
+          <SectionTitle>ต้นทาง</SectionTitle>
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <Label>ชื่อผู้ส่ง</Label>
+              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="ดึงจาก LIFF อัตโนมัติ" />
+            </div>
+            <div>
+              <Label>เบอร์ติดต่อ</Label>
+              <Input value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} placeholder="08xxxxxxxx" />
+            </div>
+            <div>
+              <Label>เวลานัดรับพัสดุ</Label>
+              <Input type="datetime-local" value={pickupAt} onChange={(e) => setPickupAt(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>แผนที่ต้นทาง</Label>
+              <div className="flex gap-2">
+                <IconButton
+                  onClick={() => {
+                    if (!navigator.geolocation) return;
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                      const { latitude: lat, longitude: lon } = pos.coords;
+                      setOrigin((o) => ({ ...o, location: { lat, lon }, mapLink: toLongdoLink(lat, lon) }));
                     });
-                },
-                () => {
-                    showMessage("ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS", true);
-                    showLoading(false);
-                }
-            );
+                  }}
+                >
+                  ตำแหน่งปัจจุบัน
+                </IconButton>
+                <IconButton onClick={() => setMapModal({ open: true, target: "origin" })}>เลือกจากแผนที่</IconButton>
+                <Input
+                  placeholder="วางลิงก์ Longdo Map ได้ เช่น https://map.longdo.com/p/13.7,100.5"
+                  value={origin.mapLink}
+                  onChange={(e) => setOrigin((o) => ({ ...o, mapLink: e.target.value }))}
+                />
+              </div>
+              {origin.location ? (
+                <div className="text-sm text-gray-600">
+                  lat: {origin.location.lat.toFixed(6)}, lon: {origin.location.lon.toFixed(6)}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">ยังไม่ระบุตำแหน่ง</div>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Destinations */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <SectionTitle>ปลายทาง</SectionTitle>
+            <button className="rounded-xl bg-black px-4 py-2 text-white" onClick={addDest}>เพิ่มปลายทาง</button>
+          </div>
+          {destinations.length === 0 && (
+            <Card>
+              <div className="text-sm text-gray-500">ยังไม่มีปลายทาง กด “เพิ่มปลายทาง”</div>
+            </Card>
+          )}
+          <div className="space-y-3">
+            {destinations.map((d, i) => (
+              <DestinationRow
+                key={d.id}
+                idx={i}
+                dest={d}
+                onChange={updateDest}
+                onRemove={removeDest}
+                onPickMap={(id) => setMapModal({ open: true, target: id })}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Summary */}
+        <Card className="space-y-3">
+          <SectionTitle>สรุปค่าโดยสาร</SectionTitle>
+          {!origin.location && <div className="text-sm text-red-600">กรุณาระบุตำแหน่งต้นทาง</div>}
+          <div className="space-y-2">
+            {destinations.map((d) => {
+              const r = perRoute.find((x) => x.id === d.id);
+              return (
+                <div key={d.id} className="flex items-center justify-between text-sm">
+                  <div className="truncate">
+                    {d.name || "ปลายทางไม่ระบุชื่อ"} {d.location ? `(${d.location.lat.toFixed(3)},${d.location.lon.toFixed(3)})` : ""}
+                  </div>
+                  <div>
+                    {d.location ? `${Math.ceil(r.km)} กม. • ${Math.round(r.fare)} บาท` : "-"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between border-t pt-2 mt-2">
+            <div className="text-base font-semibold">รวมทั้งหมด</div>
+            <div className="text-base font-semibold">{Math.round(totalFare)} บาท</div>
+          </div>
+        </Card>
+
+        {/* Submit */}
+        <button
+          className="w-full rounded-2xl bg-black py-3 text-white text-base disabled:opacity-50"
+          onClick={handleSubmit}
+          disabled={!origin.location || destinations.length === 0 || destinations.some((d) => !d.location)}
+        >
+          บันทึกและส่งคำสั่ง
+        </button>
+
+        <footer className="py-8 text-center text-xs text-gray-400">Minimal UI • React • LIFF • Longdo</footer>
+      </main>
+
+      <MapPicker
+        open={mapModal.open}
+        onClose={() => setMapModal({ open: false, target: null })}
+        onPick={handlePick}
+        initial={
+          mapModal.target === "origin"
+            ? origin.location
+            : destinations.find((d) => d.id === mapModal.target)?.location
         }
-
-        function openMapModal(target) {
-            currentMapTarget = target;
-            mapModal.style.display = 'block';
-            if (!map) initMap();
-        }
-
-        function closeMapModal() {
-            mapModal.style.display = 'none';
-            selectedMapAddressEl.textContent = 'กรุณาปักหมุดบนแผนที่';
-            mapSearchInput.value = '';
-            selectedLocation = null;
-        }
-
-        function initMap() {
-            map = new longdo.Map({ placeholder: document.getElementById('map') });
-            map.Event.bind('click', (e) => {
-                const location = map.location();
-                const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
-                map.Overlays.clear();
-                map.Overlays.add(marker);
-                map.zoom(16, true);
-                const coords = { lat: location.lat, lon: location.lon };
-                getAddressFromCoords(coords, (address) => {
-                    selectedLocation = { ...coords, address };
-                    selectedMapAddressEl.textContent = address;
-                });
-            });
-        }
-
-        function searchMap() {
-            const keyword = mapSearchInput.value;
-            if (!keyword) return;
-            map.Search.search(keyword, {
-                callback: (result) => {
-                    if (result.data.length > 0) {
-                        const firstResult = result.data[0];
-                        const location = { lat: firstResult.lat, lon: firstResult.lon };
-                        map.location(location, true);
-                        map.zoom(16, true);
-                        const marker = new longdo.Marker(location);
-                        map.Overlays.clear();
-                        map.Overlays.add(marker);
-                        getAddressFromCoords(location, (address) => {
-                            selectedLocation = { ...location, address };
-                            selectedMapAddressEl.textContent = address;
-                        });
-                    } else {
-                        showMessage('ไม่พบสถานที่ที่ค้นหา', true);
-                    }
-                }
-            });
-        }
-
-        function getAddressFromCoords(coords, callback) {
-            map.Search.search(coords, {
-                callback: (result) => {
-                    const address = result.data.length > 0 ? `${result.data[0].name}, ${result.data[0].address}` : 'ไม่สามารถระบุที่อยู่ได้';
-                    callback(address);
-                }
-            });
-        }
-
-        function confirmLocation() {
-            if (selectedLocation && currentMapTarget) {
-                updateLocationUI(currentMapTarget, { lat: selectedLocation.lat, lon: selectedLocation.lon }, selectedLocation.address);
-                closeMapModal();
-            } else {
-                showMessage('กรุณาเลือกตำแหน่งบนแผนที่ก่อน', true);
-            }
-        }
-
-        function updateLocationUI(target, coords, address) {
-            const addressEl = (target === 'origin') ? document.getElementById('originAddress') : document.getElementById(`address-${target}`);
-            const coordsEl = (target === 'origin') ? document.getElementById('originCoords') : document.getElementById(`coords-${target}`);
-            addressEl.textContent = address;
-            coordsEl.value = `${coords.lat},${coords.lon}`;
-            calculateTotal();
-        }
-
-        // --- CALCULATION ---
-        function calculateTotal() {
-            const originCoordsStr = document.getElementById('originCoords').value;
-            if (!originCoordsStr) return;
-
-            const waypoints = [longdo.Util.stringToLocation(originCoordsStr)];
-            document.querySelectorAll('[id^="destination-"]').forEach(el => {
-                const coordsStr = el.querySelector('[id^="coords-"]').value;
-                if (coordsStr) waypoints.push(longdo.Util.stringToLocation(coordsStr));
-            });
-
-            if (waypoints.length < 2) {
-                totalDistanceEl.textContent = '0.00 กม.';
-                shippingFeeEl.textContent = '฿0.00';
-                return;
-            }
-            if (!map) map = new longdo.Map({ placeholder: document.createElement('div') });
-
-            map.Route.get({
-                locationList: waypoints,
-                callback: (result) => {
-                    const distanceKm = result.distance / 1000;
-                    const fee = calculateFee(distanceKm);
-                    totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
-                    shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
-                }
-            });
-        }
-
-        function calculateFee(km) {
-            if (km <= 0) return 0;
-            if (km <= 5) return 30;
-            let fee = 30;
-            if (km > 5 && km < 13) {
-                fee += (km - 5) * 5;
-            } else if (km >= 13) {
-                fee += (12 - 5) * 5; // Fee up to 12km
-                fee += 10; // Fee for the 13th km
-                if (km > 13) fee += (km - 13) * 15; // Fee after 13km
-            }
-            return fee;
-        }
-
-        // --- FORM SUBMISSION ---
-        async function handleFormSubmit(e) {
-            e.preventDefault();
-            showLoading(true);
-
-            const originCoords = document.getElementById('originCoords').value.split(',');
-            const formData = {
-                origin: {
-                    name: senderNameInput.value,
-                    phone: document.getElementById('senderPhone').value,
-                    pickupTime: pickupTimeInput.value,
-                    address: document.getElementById('originAddress').textContent,
-                    lat: originCoords[0] ? parseFloat(originCoords[0]) : null,
-                    lon: originCoords[1] ? parseFloat(originCoords[1]) : null,
-                },
-                destinations: [],
-                summary: {
-                    totalDistance: totalDistanceEl.textContent,
-                    shippingFee: shippingFeeEl.textContent,
-                }
-            };
-            
-            let isFormValid = !!(formData.origin.phone && formData.origin.pickupTime && formData.origin.lat);
-
-            document.querySelectorAll('[id^="destination-"]').forEach(el => {
-                const id = el.id;
-                const destCoords = document.getElementById(`coords-${id}`).value.split(',');
-                const destinationData = {
-                    name: document.getElementById(`recipientName-${id}`).value,
-                    phone: document.getElementById(`recipientPhone-${id}`).value,
-                    address: document.getElementById(`address-${id}`).textContent,
-                    lat: destCoords[0] ? parseFloat(destCoords[0]) : null,
-                    lon: destCoords[1] ? parseFloat(destCoords[1]) : null,
-                };
-                if (!destinationData.name || !destinationData.phone || !destinationData.lat) isFormValid = false;
-                formData.destinations.push(destinationData);
-            });
-            
-            if (!isFormValid) {
-                showMessage('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง และปักหมุดให้ครบทุกจุดหมาย', true);
-                showLoading(false);
-                return;
-            }
-
-            try {
-                // In a real scenario, you would remove 'no-cors' and handle CORS on your GAS backend
-                await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(formData)
-                });
-                
-                showMessage('สร้างรายการสำเร็จ!', false);
-                setTimeout(() => {
-                    if (liff.isInClient()) liff.closeWindow();
-                }, 2000);
-
-            } catch (error) {
-                console.error('Error submitting form:', error);
-                showMessage('เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง', true);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // --- UTILITIES ---
-        function showLoading(isLoading) {
-            loadingOverlay.classList.toggle('hidden', !isLoading);
-        }
-
-        function showMessage(message, isError = false) {
-            notificationMessage.textContent = message;
-            if (isError) {
-                notificationIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
-                notificationIcon.className = 'icon error';
-            } else {
-                notificationIcon.innerHTML = '<i class="fas fa-check-circle"></i>';
-                notificationIcon.className = 'icon success';
-            }
-            notificationModal.classList.add('show');
-        }
-
-    </script>
-</body>
-</html>
+      />
+    </div>
+  );
+}
