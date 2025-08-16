@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรับส่งพัสดุ</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 480px;
+            margin: 0 auto;
+            background: #ffffff;
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .form-container {
+            padding: 20px;
+        }
+
+        .section {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border: 1px solid #f0f0f0;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #667eea;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #ffffff;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .datetime-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .map-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #ffffff;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+
+        .btn-outline:hover {
+            background: #f8f9fa;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .location-display {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #6c757d;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+        }
+
+        .location-display.has-location {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .destination-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            position: relative;
+            border: 1px solid #e9ecef;
+        }
+
+        .destination-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .destination-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .add-destination {
+            width: 100%;
+            margin-top: 10px;
+            border: 2px dashed #dee2e6;
+            background: transparent;
+            color: #6c757d;
+        }
+
+        .add-destination:hover {
+            border-color: #667eea;
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .submit-section {
+            padding: 20px;
+            border-top: 1px solid #e9ecef;
+            background: #f8f9fa;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .icon {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .form-container {
+                padding: 15px;
+            }
+            
+            .section {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+            
+            .datetime-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .map-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚚 ระบบรับส่งพัสดุ</h1>
+            <p>กรอกข้อมูลและเลือกตำแหน่งสำหรับการจัดส่ง</p>
+        </div>
+
+        <div class="form-container">
+            <div class="success-message" id="successMessage">
+                ✅ ส่งข้อมูลสำเร็จแล้ว! เราจะติดต่อกลับในเร็วๆ นี้
+            </div>
+            
+            <div class="error-message" id="errorMessage">
+                ❌ เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง
+            </div>
+
+            <form id="parcelForm">
+                <!-- ต้นทาง -->
+                <div class="section">
+                    <h2 class="section-title">📍 ข้อมูลต้นทาง</h2>
+                    
+                    <div class="form-group">
+                        <label for="senderName">ชื่อผู้ส่ง</label>
+                        <input type="text" id="senderName" class="form-control" placeholder="ชื่อผู้ส่งพัสดุ" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="senderPhone">เบอร์ติดต่อ</label>
+                        <input type="tel" id="senderPhone" class="form-control" placeholder="0xx-xxx-xxxx" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>วันเวลานัดรับพัสดุ</label>
+                        <div class="datetime-container">
+                            <input type="date" id="pickupDate" class="form-control" required>
+                            <input type="time" id="pickupTime" class="form-control" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>ตำแหน่งรับพัสดุ</label>
+                        <div class="map-buttons">
+                            <button type="button" class="btn btn-primary" onclick="getCurrentLocation('origin')">
+                                📍 ตำแหน่งปัจจุบัน
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="selectFromMap('origin')">
+                                🗺️ เลือกจากแผนที่
+                            </button>
+                        </div>
+                        <div class="location-display" id="originLocation">
+                            กรุณาเลือกตำแหน่งรับพัสดุ
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ปลายทาง -->
+                <div class="section">
+                    <h2 class="section-title">🎯 ข้อมูลปลายทาง</h2>
+                    <div id="destinationsContainer">
+                        <div class="destination-item" data-index="0">
+                            <div class="destination-header">
+                                <div class="destination-number">1</div>
+                                <button type="button" class="btn btn-danger" onclick="removeDestination(0)" style="display: none;">ลบ</button>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>ชื่อผู้รับ</label>
+                                <input type="text" class="form-control receiver-name" placeholder="ชื่อผู้รับพัสดุ" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>เบอร์ติดต่อผู้รับ</label>
+                                <input type="tel" class="form-control receiver-phone" placeholder="0xx-xxx-xxxx" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>ตำแหน่งส่งพัสดุ</label>
+                                <button type="button" class="btn btn-secondary" onclick="selectFromMap('destination', 0)" style="width: 100%;">
+                                    🗺️ เลือกจากแผนที่
+                                </button>
+                                <div class="location-display destination-location">
+                                    กรุณาเลือกตำแหน่งส่งพัสดุ
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn add-destination" onclick="addDestination()">
+                        ➕ เพิ่มปลายทางอีก 1 ที่
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="submit-section">
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>กำลังส่งข้อมูล...</p>
+            </div>
+            
+            <button type="button" class="btn btn-success" onclick="submitForm()" style="width: 100%; font-size: 16px; padding: 15px;">
+                📤 ส่งข้อมูลสั่งจ้าง
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let liffProfile = null;
+        let originLocationData = null;
+        let destinationLocations = [null];
+        let destinationCount = 1;
+
+        // Initialize LIFF
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeLiff();
+            setDefaultDateTime();
+        });
+
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: '2007906947-zQ0mRjXg' }); // แทนที่ด้วย LIFF ID จริง
+                
+                if (liff.isLoggedIn()) {
+                    liffProfile = await liff.getProfile();
+                    document.getElementById('senderName').value = liffProfile.displayName;
+                } else {
+                    liff.login();
+                }
+            } catch (error) {
+                console.error('LIFF initialization failed', error);
+                // ใส่ข้อมูลตัวอย่างสำหรับการทดสอบ
+                document.getElementById('senderName').value = 'ทดสอบผู้ใช้';
+            }
+        }
+
+        function setDefaultDateTime() {
+            const now = new Date();
+            const tomorrow = new Date(now);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const dateStr = tomorrow.toISOString().split('T')[0];
+            const timeStr = '09:00';
+            
+            document.getElementById('pickupDate').value = dateStr;
+            document.getElementById('pickupTime').value = timeStr;
+        }
+
+        function getCurrentLocation(type) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        
+                        if (type === 'origin') {
+                            originLocationData = { lat, lng };
+                            updateLocationDisplay('originLocation', `📍 ตำแหน่งปัจจุบัน (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+                        }
+                    },
+                    error => {
+                        alert('ไม่สามารถเข้าถึงตำแหน่งได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง');
+                        console.error('Geolocation error:', error);
+                    }
+                );
+            } else {
+                alert('เบราว์เซอร์ไม่รองรับการหาตำแหน่ง');
+            }
+        }
+
+        function selectFromMap(type, index = 0) {
+            // เปิด Google Maps สำหรับเลือกตำแหน่ง
+            const mapUrl = 'https://www.google.com/maps/place/';
+            
+            // ในการใช้งานจริง ควรใช้ Google Maps JavaScript API
+            // หรือเปิดหน้าต่างใหม่ให้ผู้ใช้เลือกตำแหน่ง
+            const selectedLocation = prompt('กรุณาใส่ลิงก์ Google Maps หรือพิกัด (lat,lng):');
+            
+            if (selectedLocation) {
+                if (selectedLocation.includes('maps')) {
+                    // ดึงพิกัดจาก Google Maps URL (ตัวอย่างง่ายๆ)
+                    const coords = extractCoordsFromUrl(selectedLocation);
+                    if (coords) {
+                        handleLocationSelection(type, index, coords, selectedLocation);
+                    }
+                } else if (selectedLocation.includes(',')) {
+                    // รูปแบบ lat,lng
+                    const [lat, lng] = selectedLocation.split(',').map(coord => parseFloat(coord.trim()));
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        handleLocationSelection(type, index, {lat, lng}, `พิกัด: ${lat}, ${lng}`);
+                    }
+                }
+            }
+        }
+
+        function extractCoordsFromUrl(url) {
+            // ตัวอย่างการดึงพิกัดจาก Google Maps URL
+            const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lng: parseFloat(match[2])
+                };
+            }
+            return null;
+        }
+
+        function handleLocationSelection(type, index, coords, displayText) {
+            if (type === 'origin') {
+                originLocationData = coords;
+                updateLocationDisplay('originLocation', `🗺️ ${displayText}`);
+            } else {
+                destinationLocations[index] = coords;
+                const locationElement = document.querySelectorAll('.destination-location')[index];
+                updateLocationDisplay(locationElement.id || `dest-location-${index}`, `🗺️ ${displayText}`, locationElement);
+            }
+        }
+
+        function updateLocationDisplay(elementId, text, element = null) {
+            const locationElement = element || document.getElementById(elementId);
+            locationElement.textContent = text;
+            locationElement.classList.add('has-location');
+        }
+
+        function addDestination() {
+            const container = document.getElementById('destinationsContainer');
+            const newIndex = destinationCount;
+            
+            const destinationHtml = `
+                <div class="destination-item" data-index="${newIndex}">
+                    <div class="destination-header">
+                        <div class="destination-number">${newIndex + 1}</div>
+                        <button type="button" class="btn btn-danger" onclick="removeDestination(${newIndex})">ลบ</button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>ชื่อผู้รับ</label>
+                        <input type="text" class="form-control receiver-name" placeholder="ชื่อผู้รับพัสดุ" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>เบอร์ติดต่อผู้รับ</label>
+                        <input type="tel" class="form-control receiver-phone" placeholder="0xx-xxx-xxxx" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>ตำแหน่งส่งพัสดุ</label>
+                        <button type="button" class="btn btn-secondary" onclick="selectFromMap('destination', ${newIndex})" style="width: 100%;">
+                            🗺️ เลือกจากแผนที่
+                        </button>
+                        <div class="location-display destination-location" id="dest-location-${newIndex}">
+                            กรุณาเลือกตำแหน่งส่งพัสดุ
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', destinationHtml);
+            destinationLocations.push(null);
+            destinationCount++;
+            
+            // แสดงปุ่มลบสำหรับปลายทางแรก
+            if (destinationCount > 1) {
+                document.querySelector('[data-index="0"] .btn-danger').style.display = 'inline-flex';
+            }
+        }
+
+        function removeDestination(index) {
+            if (destinationCount <= 1) return;
+            
+            const destinationElement = document.querySelector(`[data-index="${index}"]`);
+            destinationElement.remove();
+            
+            destinationLocations.splice(index, 1);
+            destinationCount--;
+            
+            // อัพเดทหมายเลขปลายทาง
+            updateDestinationNumbers();
+            
+            // ซ่อนปุ่มลบถ้าเหลือปลายทางเดียว
+            if (destinationCount <= 1) {
+                document.querySelector('[data-index="0"] .btn-danger').style.display = 'none';
+            }
+        }
+
+        function updateDestinationNumbers() {
+            const destinations = document.querySelectorAll('.destination-item');
+            destinations.forEach((dest, index) => {
+                dest.dataset.index = index;
+                dest.querySelector('.destination-number').textContent = index + 1;
+                const deleteButton = dest.querySelector('.btn-danger');
+                deleteButton.setAttribute('onclick', `removeDestination(${index})`);
+                const mapButton = dest.querySelector('.btn-secondary');
+                mapButton.setAttribute('onclick', `selectFromMap('destination', ${index})`);
+            });
+        }
+
+        function validateForm() {
+            const senderName = document.getElementById('senderName').value.trim();
+            const senderPhone = document.getElementById('senderPhone').value.trim();
+            const pickupDate = document.getElementById('pickupDate').value;
+            const pickupTime = document.getElementById('pickupTime').value;
+            
+            if (!senderName || !senderPhone || !pickupDate || !pickupTime) {
+                alert('กรุณากรอกข้อมูลต้นทางให้ครบถ้วน');
+                return false;
+            }
+            
+            if (!originLocationData) {
+                alert('กรุณาเลือกตำแหน่งรับพัสดุ');
+                return false;
+            }
+            
+            const receiverNames = document.querySelectorAll('.receiver-name');
+            const receiverPhones = document.querySelectorAll('.receiver-phone');
+            
+            for (let i = 0; i < receiverNames.length; i++) {
+                if (!receiverNames[i].value.trim() || !receiverPhones[i].value.trim()) {
+                    alert(`กรุณากรอกข้อมูลผู้รับที่ ${i + 1} ให้ครบถ้วน`);
+                    return false;
+                }
+                
+                if (!destinationLocations[i]) {
+                    alert(`กรุณาเลือกตำแหน่งส่งพัสดุที่ ${i + 1}`);
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        async function submitForm() {
+            if (!validateForm()) return;
+            
+            const loading = document.getElementById('loading');
+            const submitButton = event.target;
+            
+            loading.style.display = 'block';
+            submitButton.style.display = 'none';
+            
+            try {
+                const formData = collectFormData();
+                
+                // ส่งข้อมูลไปยัง Google Apps Script
+                const response = await fetch('YOUR_GOOGLE_APPS_SCRIPT_URL', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (response.ok) {
+                    showSuccessMessage();
+                    resetForm();
+                } else {
+                    throw new Error('Server error');
+                }
+                
+            } catch (error) {
+                console.error('Submit error:', error);
+                showErrorMessage();
+            } finally {
+                loading.style.display = 'none';
+                submitButton.style.display = 'block';
+            }
+        }
+
+        function collectFormData() {
+            const senderName = document.getElementById('senderName').value.trim();
+            const senderPhone = document.getElementById('senderPhone').value.trim();
+            const pickupDate = document.getElementById('pickupDate').value;
+            const pickupTime = document.getElementById('pickupTime').value;
+            
+            const receiverNames = document.querySelectorAll('.receiver-name');
+            const receiverPhones = document.querySelectorAll('.receiver-phone');
+            
+            const destinations = [];
+            for (let i = 0; i < receiverNames.length; i++) {
+                destinations.push({
+                    receiverName: receiverNames[i].value.trim(),
+                    receiverPhone: receiverPhones[i].value.trim(),
+                    location: destinationLocations[i]
+                });
+            }
+            
+            return {
+                sender: {
+                    name: senderName,
+                    phone: senderPhone,
+                    liffUserId: liffProfile ? liffProfile.userId : null,
+                    pickupDateTime: `${pickupDate} ${pickupTime}`,
+                    location: originLocationData
+                },
+                destinations: destinations,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        function showSuccessMessage() {
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
+            
+            setTimeout(() => {
+                document.getElementById('successMessage').style.display = 'none';
+            }, 5000);
+        }
+
+        function showErrorMessage() {
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('successMessage').style.display = 'none';
+            
+            setTimeout(() => {
+                document.getElementById('errorMessage').style.display = 'none';
+            }, 5000);
+        }
+
+        function resetForm() {
+            document.getElementById('parcelForm').reset();
+            originLocationData = null;
+            destinationLocations = [null];
+            
+            document.getElementById('originLocation').textContent = 'กรุณาเลือกตำแหน่งรับพัสดุ';
+            document.getElementById('originLocation').classList.remove('has-location');
+            
+            const destLocations = document.querySelectorAll('.destination-location');
+            destLocations.forEach(loc => {
+                loc.textContent = 'กรุณาเลือกตำแหน่งส่งพัสดุ';
+                loc.classList.remove('has-location');
+            });
+            
+            setDefaultDateTime();
+            
+            if (liffProfile) {
+                document.getElementById('senderName').value = liffProfile.displayName;
+            }
+        }
+
+        // เพิ่มฟังก์ชันสำหรับ Google Maps API (ตัวอย่าง)
+        function initGoogleMaps() {
+            // โหลด Google Maps API
+            // const script = document.createElement('script');
+            // script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places`;
+            // document.head.appendChild(script);
+        }
+    </script>
+</body>
+</html>
