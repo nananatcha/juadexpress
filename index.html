@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 const CONFIG = {
   LIFF_ID: "2007906947-zQ0mRjXg",
   LONGDO_API_KEY: "7fe4440cd70cb6961fe1fbfdcea94610",
-  GAS_ENDPOINT: "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
+  GAS_ENDPOINT:
+    "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec",
 };
 
 // === Utilities ===
@@ -30,16 +31,13 @@ const haversineKm = (a, b) => {
   const lat2 = (b.lat * Math.PI) / 180;
   const sinDLat = Math.sin(dLat / 2);
   const sinDLon = Math.sin(dLon / 2);
-  const x = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+  const x =
+    sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
   const y = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
   return R * y;
 };
 
-// Fare rule:
-// 0-5 km => flat 30 THB
-// >5 to 12 km => +5 THB per km
-// 13th km => +10 THB
-// 14 km and beyond => +15 THB per km (from km 14 onward)
+// === Fare Calculation ===
 const calcFare = (kmFloat) => {
   const km = Math.ceil(kmFloat || 0);
   if (km <= 5) return 30;
@@ -51,39 +49,30 @@ const calcFare = (kmFloat) => {
   return fare;
 };
 
-const Input = (props) => (
-  <input
-    {...props}
-    className={
-      "w-full rounded-2xl border border-gray-200 px-4 py-3 text-base outline-none focus:ring-2 focus:ring-black " +
-      (props.className || "")
-    }
-  />
-);
-
+// === UI Helpers ===
 const Label = ({ children }) => (
-  <label className="block text-sm font-medium text-gray-700 mb-1">{children}</label>
+  <label className="block text-sm font-medium mb-1">{children}</label>
 );
 
-const Card = ({ children, className }) => (
-  <div className={`rounded-2xl bg-white shadow-sm border border-gray-100 p-4 ${className || ""}`}>{children}</div>
+const Card = ({ children }) => (
+  <div className="bg-white shadow-md rounded-2xl p-4 mb-4">{children}</div>
 );
 
 const SectionTitle = ({ children }) => (
-  <h2 className="text-lg font-semibold text-gray-900 mb-3">{children}</h2>
+  <h2 className="text-lg font-semibold mb-2">{children}</h2>
 );
 
-const IconButton = ({ children, onClick, type = "button" }) => (
+const IconButton = ({ children, onClick }) => (
   <button
-    type={type}
+    type="button"
     onClick={onClick}
-    className="rounded-xl border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 active:scale-[0.99]"
+    className="px-3 py-1 bg-gray-200 rounded-lg mr-2"
   >
     {children}
   </button>
 );
 
-// === Map Picker (Longdo) ===
+// === Map Picker ===
 const MapPicker = ({ open, onClose, onPick, initial }) => {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
@@ -92,22 +81,23 @@ const MapPicker = ({ open, onClose, onPick, initial }) => {
   useEffect(() => {
     if (!open) return;
     const init = async () => {
-      await loadScript(`https://api.longdo.com/map/?key=${CONFIG.LONGDO_API_KEY}`);
-      // eslint-disable-next-line no-undef
+      await loadScript(
+        `https://api.longdo.com/map/?key=${CONFIG.LONGDO_API_KEY}`
+      );
       const map = new window.longdo.Map({
         placeholder: containerRef.current,
-        language: 'th',
+        language: "th",
       });
       mapRef.current = map;
-      // eslint-disable-next-line no-undef
       const longdo = window.longdo;
-
-      const center = initial?.lat ? { lon: initial.lon, lat: initial.lat } : { lon: 100.5018, lat: 13.7563 };
+      const center = initial?.lat
+        ? { lon: initial.lon, lat: initial.lat }
+        : { lon: 100.5018, lat: 13.7563 };
       map.location(center, true);
       markerRef.current = new longdo.Marker(center);
       map.Overlays.add(markerRef.current);
 
-      map.Event.bind('click', function () {
+      map.Event.bind("click", function () {
         const loc = map.location();
         if (markerRef.current) map.Overlays.remove(markerRef.current);
         markerRef.current = new longdo.Marker(loc);
@@ -115,43 +105,35 @@ const MapPicker = ({ open, onClose, onPick, initial }) => {
       });
     };
     init();
-    return () => {
-      // no explicit destroy needed in Longdo
-    };
   }, [open]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-md rounded-2xl bg-white p-3 shadow-xl">
-        <div ref={containerRef} className="h-80 w-full rounded-xl bg-gray-100" />
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <IconButton onClick={onClose}>ยกเลิก</IconButton>
-          <div className="flex gap-2">
-            <IconButton
-              onClick={() => {
-                if (!navigator.geolocation || !mapRef.current) return;
-                navigator.geolocation.getCurrentPosition((pos) => {
-                  const { latitude: lat, longitude: lon } = pos.coords;
-                  mapRef.current.location({ lat, lon }, true);
-                });
-              }}
-            >
-              ตำแหน่งปัจจุบัน
-            </IconButton>
-            <button
-              className="rounded-xl bg-black px-4 py-2 text-white"
-              onClick={() => {
-                const loc = mapRef.current?.location();
-                if (!loc) return;
-                onPick({ lat: loc.lat, lon: loc.lon });
-              }}
-            >
-              ใช้ตำแหน่งนี้
-            </button>
-          </div>
-        </div>
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      <div ref={containerRef} className="flex-1" />
+      <div className="p-2 border-t flex justify-between">
+        <IconButton onClick={onClose}>ยกเลิก</IconButton>
+        <IconButton
+          onClick={() => {
+            if (!navigator.geolocation || !mapRef.current) return;
+            navigator.geolocation.getCurrentPosition((pos) => {
+              const { latitude: lat, longitude: lon } = pos.coords;
+              mapRef.current.location({ lat, lon }, true);
+            });
+          }}
+        >
+          ตำแหน่งปัจจุบัน
+        </IconButton>
+        <IconButton
+          onClick={() => {
+            const loc = mapRef.current?.location();
+            if (!loc) return;
+            onPick({ lat: loc.lat, lon: loc.lon });
+          }}
+        >
+          ใช้ตำแหน่งนี้
+        </IconButton>
       </div>
     </div>
   );
@@ -160,68 +142,62 @@ const MapPicker = ({ open, onClose, onPick, initial }) => {
 // === Destination Row ===
 const DestinationRow = ({ idx, dest, onChange, onRemove, onPickMap }) => {
   return (
-    <Card className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">ปลายทาง #{idx + 1}</div>
-        <IconButton onClick={() => onRemove(dest.id)}>ลบ</IconButton>
+    <Card>
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-semibold">ปลายทาง #{idx + 1}</h3>
+        <button
+          className="text-red-500 text-sm"
+          onClick={() => onRemove(dest.id)}
+        >
+          ลบ
+        </button>
       </div>
-      <div className="grid grid-cols-1 gap-3">
-        <div>
-          <Label>ชื่อผู้รับ</Label>
-          <Input
-            placeholder="เช่น คุณเอ"
-            value={dest.name}
-            onChange={(e) => onChange(dest.id, { name: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label>เบอร์ติดต่อ</Label>
-          <Input
-            placeholder="08xxxxxxxx"
-            value={dest.phone}
-            onChange={(e) => onChange(dest.id, { phone: e.target.value })}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>แผนที่ปลายทาง</Label>
-          <div className="flex gap-2">
-            <IconButton onClick={() => onPickMap(dest.id)}>เลือกจากแผนที่</IconButton>
-            <Input
-              placeholder="วางลิงก์ Longdo Map ได้ เช่น https://map.longdo.com/p/13.7,100.5"
-              value={dest.mapLink || ""}
-              onChange={(e) => onChange(dest.id, { mapLink: e.target.value })}
-            />
-          </div>
-          {dest.location ? (
-            <div className="text-sm text-gray-600">
-              lat: {dest.location.lat.toFixed(6)}, lon: {dest.location.lon.toFixed(6)}
-            </div>
-          ) : (
-            <div className="text-sm text-gray-400">ยังไม่ระบุตำแหน่ง</div>
-          )}
-        </div>
+      <Label>ชื่อผู้รับ</Label>
+      <input
+        type="text"
+        className="w-full border rounded-lg p-2 mb-2"
+        value={dest.name}
+        onChange={(e) => onChange(dest.id, { name: e.target.value })}
+      />
+      <Label>เบอร์ติดต่อ</Label>
+      <input
+        type="text"
+        className="w-full border rounded-lg p-2 mb-2"
+        value={dest.phone}
+        onChange={(e) => onChange(dest.id, { phone: e.target.value })}
+      />
+      <Label>แผนที่ปลายทาง</Label>
+      <div className="flex mb-2">
+        <IconButton onClick={() => onPickMap(dest.id)}>เลือกจากแผนที่</IconButton>
       </div>
+      <input
+        type="text"
+        className="w-full border rounded-lg p-2 mb-2"
+        placeholder="วางลิงก์ Longdo Map"
+        value={dest.mapLink}
+        onChange={(e) => onChange(dest.id, { mapLink: e.target.value })}
+      />
+      {dest.location ? (
+        <div className="text-xs text-gray-500">
+          lat: {dest.location.lat.toFixed(6)}, lon: {dest.location.lon.toFixed(6)}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-400">ยังไม่ระบุตำแหน่ง</div>
+      )}
     </Card>
   );
 };
 
 // === Main App ===
 export default function App() {
-  // LIFF profile
   const [liffReady, setLiffReady] = useState(false);
   const [profileName, setProfileName] = useState("");
-
-  // Origin
   const [senderName, setSenderName] = useState("");
   const [senderPhone, setSenderPhone] = useState("");
   const [pickupAt, setPickupAt] = useState("");
   const [origin, setOrigin] = useState({ location: null, mapLink: "" });
-
-  // Destinations
   const [destinations, setDestinations] = useState([]);
-
-  // Modals
-  const [mapModal, setMapModal] = useState({ open: false, target: null }); // target: 'origin' | destId
+  const [mapModal, setMapModal] = useState({ open: false, target: null });
 
   const parseLongdoLink = (link) => {
     try {
@@ -243,13 +219,13 @@ export default function App() {
   // Init LIFF
   useEffect(() => {
     const boot = async () => {
-      if (!CONFIG.LIFF_ID || CONFIG.LIFF_ID === "YOUR_LIFF_ID") return; // skip if not configured
-      await loadScript("https://static.line-scdn.net/liff/edge/versions/2.22.4/sdk.js");
-      // eslint-disable-next-line no-undef
+      if (!CONFIG.LIFF_ID || CONFIG.LIFF_ID === "YOUR_LIFF_ID") return;
+      await loadScript(
+        "https://static.line-scdn.net/liff/edge/versions/2.22.4/sdk.js"
+      );
       await window.liff.init({ liffId: CONFIG.LIFF_ID });
       setLiffReady(true);
       try {
-        // eslint-disable-next-line no-undef
         const profile = await window.liff.getProfile();
         setProfileName(profile.displayName || "");
         setSenderName(profile.displayName || "");
@@ -258,7 +234,6 @@ export default function App() {
     boot();
   }, []);
 
-  // When user pastes Longdo link into origin or destinations, parse to location
   useEffect(() => {
     const loc = parseLongdoLink(origin.mapLink);
     if (loc) setOrigin((o) => ({ ...o, location: loc }));
@@ -266,7 +241,17 @@ export default function App() {
 
   const updateDest = (id, patch) => {
     setDestinations((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...patch, ...(patch.mapLink ? { location: parseLongdoLink(patch.mapLink) || d.location } : {}) } : d))
+      prev.map((d) =>
+        d.id === id
+          ? {
+              ...d,
+              ...patch,
+              ...(patch.mapLink
+                ? { location: parseLongdoLink(patch.mapLink) || d.location }
+                : {}),
+            }
+          : d
+      )
     );
   };
 
@@ -277,11 +262,8 @@ export default function App() {
     ]);
   };
 
-  const removeDest = (id) => setDestinations((prev) => prev.filter((d) => d.id !== id));
-
-  const allItems = useMemo(() => {
-    return destinations.map((d) => ({ id: d.id, location: d.location }));
-  }, [destinations]);
+  const removeDest = (id) =>
+    setDestinations((prev) => prev.filter((d) => d.id !== id));
 
   const perRoute = useMemo(() => {
     if (!origin.location) return [];
@@ -296,9 +278,23 @@ export default function App() {
 
   const handlePick = (coords) => {
     if (mapModal.target === "origin") {
-      setOrigin((o) => ({ ...o, location: coords, mapLink: toLongdoLink(coords.lat, coords.lon) }));
+      setOrigin((o) => ({
+        ...o,
+        location: coords,
+        mapLink: toLongdoLink(coords.lat, coords.lon),
+      }));
     } else {
-      setDestinations((prev) => prev.map((d) => (d.id === mapModal.target ? { ...d, location: coords, mapLink: toLongdoLink(coords.lat, coords.lon) } : d)));
+      setDestinations((prev) =>
+        prev.map((d) =>
+          d.id === mapModal.target
+            ? {
+                ...d,
+                location: coords,
+                mapLink: toLongdoLink(coords.lat, coords.lon),
+              }
+            : d
+        )
+      );
     }
     setMapModal({ open: false, target: null });
   };
@@ -312,7 +308,13 @@ export default function App() {
         location: origin.location,
         mapLink: origin.mapLink,
       },
-      destinations: destinations.map((d) => ({ id: d.id, name: d.name, phone: d.phone, location: d.location, mapLink: d.mapLink })),
+      destinations: destinations.map((d) => ({
+        id: d.id,
+        name: d.name,
+        phone: d.phone,
+        location: d.location,
+        mapLink: d.mapLink,
+      })),
       pricing: perRoute,
       totalFare: Math.round(totalFare),
       createdAt: new Date().toISOString(),
@@ -333,135 +335,94 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto max-w-xl px-4 py-3 flex items-center justify-between">
-          <div className="text-base font-semibold">รับส่งพัสดุ</div>
-          <div className="text-xs text-gray-600">LIFF {liffReady ? "พร้อม" : "รอ"}</div>
+    <div className="max-w-md mx-auto p-4 bg-gray-50 min-h-screen">
+      <h1 className="text-xl font-bold mb-4">รับส่งพัสดุ</h1>
+      <p className="mb-2">LIFF: {liffReady ? "พร้อม" : "รอ"}</p>
+
+      {/* Origin */}
+      <Card>
+        <SectionTitle>ต้นทาง</SectionTitle>
+        <Label>ชื่อผู้ส่ง</Label>
+        <input
+          type="text"
+          className="w-full border rounded-lg p-2 mb-2"
+          value={senderName}
+          onChange={(e) => setSenderName(e.target.value)}
+          placeholder="ดึงจาก LIFF อัตโนมัติ"
+        />
+        <Label>เบอร์ติดต่อ</Label>
+        <input
+          type="text"
+          className="w-full border rounded-lg p-2 mb-2"
+          value={senderPhone}
+          onChange={(e) => setSenderPhone(e.target.value)}
+          placeholder="08xxxxxxxx"
+        />
+        <Label>เวลานัดรับพัสดุ</Label>
+        <input
+          type="datetime-local"
+          className="w-full border rounded-lg p-2 mb-2"
+          value={pickupAt}
+          onChange={(e) => setPickupAt(e.target.value)}
+        />
+        <Label>แผนที่ต้นทาง</Label>
+        <div className="flex mb-2">
+          <IconButton
+            onClick={() => {
+              if (!navigator.geolocation) return;
+              navigator.geolocation.getCurrentPosition((pos) => {
+                const { latitude: lat, longitude: lon } = pos.coords;
+                setOrigin((o) => ({
+                  ...o,
+                  location: { lat, lon },
+                  mapLink: toLongdoLink(lat, lon),
+                }));
+              });
+            }}
+          >
+            ตำแหน่งปัจจุบัน
+          </IconButton>
+          <IconButton onClick={() => setMapModal({ open: true, target: "origin" })}>
+            เลือกจากแผนที่
+          </IconButton>
         </div>
-      </header>
+        <input
+          type="text"
+          className="w-full border rounded-lg p-2 mb-2"
+          placeholder="วางลิงก์ Longdo Map"
+          value={origin.mapLink}
+          onChange={(e) => setOrigin((o) => ({ ...o, mapLink: e.target.value }))}
+        />
+        {origin.location ? (
+          <div className="text-xs text-gray-500">
+            lat: {origin.location.lat.toFixed(6)}, lon: {origin.location.lon.toFixed(6)}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-400">ยังไม่ระบุตำแหน่ง</div>
+        )}
+      </Card>
 
-      <main className="mx-auto max-w-xl px-4 py-4 space-y-4">
-        {/* Origin */}
-        <Card className="space-y-4">
-          <SectionTitle>ต้นทาง</SectionTitle>
-          <div className="grid grid-cols-1 gap-3">
-            <div>
-              <Label>ชื่อผู้ส่ง</Label>
-              <Input value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="ดึงจาก LIFF อัตโนมัติ" />
-            </div>
-            <div>
-              <Label>เบอร์ติดต่อ</Label>
-              <Input value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} placeholder="08xxxxxxxx" />
-            </div>
-            <div>
-              <Label>เวลานัดรับพัสดุ</Label>
-              <Input type="datetime-local" value={pickupAt} onChange={(e) => setPickupAt(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>แผนที่ต้นทาง</Label>
-              <div className="flex gap-2">
-                <IconButton
-                  onClick={() => {
-                    if (!navigator.geolocation) return;
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                      const { latitude: lat, longitude: lon } = pos.coords;
-                      setOrigin((o) => ({ ...o, location: { lat, lon }, mapLink: toLongdoLink(lat, lon) }));
-                    });
-                  }}
-                >
-                  ตำแหน่งปัจจุบัน
-                </IconButton>
-                <IconButton onClick={() => setMapModal({ open: true, target: "origin" })}>เลือกจากแผนที่</IconButton>
-                <Input
-                  placeholder="วางลิงก์ Longdo Map ได้ เช่น https://map.longdo.com/p/13.7,100.5"
-                  value={origin.mapLink}
-                  onChange={(e) => setOrigin((o) => ({ ...o, mapLink: e.target.value }))}
-                />
-              </div>
-              {origin.location ? (
-                <div className="text-sm text-gray-600">
-                  lat: {origin.location.lat.toFixed(6)}, lon: {origin.location.lon.toFixed(6)}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-400">ยังไม่ระบุตำแหน่ง</div>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        {/* Destinations */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionTitle>ปลายทาง</SectionTitle>
-            <button className="rounded-xl bg-black px-4 py-2 text-white" onClick={addDest}>เพิ่มปลายทาง</button>
-          </div>
-          {destinations.length === 0 && (
-            <Card>
-              <div className="text-sm text-gray-500">ยังไม่มีปลายทาง กด “เพิ่มปลายทาง”</div>
-            </Card>
-          )}
-          <div className="space-y-3">
-            {destinations.map((d, i) => (
-              <DestinationRow
-                key={d.id}
-                idx={i}
-                dest={d}
-                onChange={updateDest}
-                onRemove={removeDest}
-                onPickMap={(id) => setMapModal({ open: true, target: id })}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Summary */}
-        <Card className="space-y-3">
-          <SectionTitle>สรุปค่าโดยสาร</SectionTitle>
-          {!origin.location && <div className="text-sm text-red-600">กรุณาระบุตำแหน่งต้นทาง</div>}
-          <div className="space-y-2">
-            {destinations.map((d) => {
-              const r = perRoute.find((x) => x.id === d.id);
-              return (
-                <div key={d.id} className="flex items-center justify-between text-sm">
-                  <div className="truncate">
-                    {d.name || "ปลายทางไม่ระบุชื่อ"} {d.location ? `(${d.location.lat.toFixed(3)},${d.location.lon.toFixed(3)})` : ""}
-                  </div>
-                  <div>
-                    {d.location ? `${Math.ceil(r.km)} กม. • ${Math.round(r.fare)} บาท` : "-"}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex items-center justify-between border-t pt-2 mt-2">
-            <div className="text-base font-semibold">รวมทั้งหมด</div>
-            <div className="text-base font-semibold">{Math.round(totalFare)} บาท</div>
-          </div>
-        </Card>
-
-        {/* Submit */}
+      {/* Destinations */}
+      <div className="flex justify-between items-center mb-2">
+        <SectionTitle>ปลายทาง</SectionTitle>
         <button
-          className="w-full rounded-2xl bg-black py-3 text-white text-base disabled:opacity-50"
-          onClick={handleSubmit}
-          disabled={!origin.location || destinations.length === 0 || destinations.some((d) => !d.location)}
+          className="px-3 py-1 bg-blue-500 text-white rounded-lg"
+          onClick={addDest}
         >
-          บันทึกและส่งคำสั่ง
+          เพิ่มปลายทาง
         </button>
-
-        <footer className="py-8 text-center text-xs text-gray-400">Minimal UI • React • LIFF • Longdo</footer>
-      </main>
-
-      <MapPicker
-        open={mapModal.open}
-        onClose={() => setMapModal({ open: false, target: null })}
-        onPick={handlePick}
-        initial={
-          mapModal.target === "origin"
-            ? origin.location
-            : destinations.find((d) => d.id === mapModal.target)?.location
-        }
-      />
-    </div>
-  );
-}
+      </div>
+      {destinations.length === 0 && (
+        <div className="text-sm text-gray-400 mb-2">
+          ยังไม่มีปลายทาง กด “เพิ่มปลายทาง”
+        </div>
+      )}
+      {destinations.map((d, i) => (
+        <DestinationRow
+          key={d.id}
+          idx={i}
+          dest={d}
+          onChange={updateDest}
+          onRemove={removeDest}
+          onPickMap={(id) => setMapModal({ open: true, target: id })}
+        />
