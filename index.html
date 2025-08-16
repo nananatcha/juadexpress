@@ -501,39 +501,173 @@
         }
 
         function selectFromMap(type, index = 0) {
-            // เปิด Google Maps สำหรับเลือกตำแหน่ง
-            const mapUrl = 'https://www.google.com/maps/place/';
+            showLocationModal(type, index);
+        }
+
+        function showLocationModal(type, index) {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;" onclick="closeLocationModal()">
+                    <div style="background: white; border-radius: 12px; padding: 20px; max-width: 400px; width: 90%; margin: 20px;" onclick="event.stopPropagation()">
+                        <h3 style="margin: 0 0 20px 0; color: #667eea;">🗺️ เลือกตำแหน่ง</h3>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <button onclick="openGoogleMaps('${type}', ${index})" style="width: 100%; padding: 15px; background: #4285f4; color: white; border: none; border-radius: 8px; font-size: 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.3s ease;">
+                                📍 เปิด Google Maps เลือกตำแหน่ง
+                            </button>
+                            <p style="font-size: 12px; color: #666; margin: 0;">จะเปิดหน้าต่างใหม่ให้เลือกตำแหน่ง</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">หรือวางลิงก์ Google Maps:</label>
+                            <input type="text" id="mapUrlInput" placeholder="https://maps.google.com/..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <p style="font-size: 12px; color: #666; margin: 5px 0 0 0;">คัดลอกลิงก์จาก Google Maps มาวางที่นี่</p>
+                        </div>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 500;">หรือใส่พิกัดโดยตรง:</label>
+                            <input type="text" id="coordsInput" placeholder="16.432200, 102.823600" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                            <p style="font-size: 12px; color: #666; margin: 5px 0 0 0;">รูปแบบ: ละติจูด, ลองจิจูด</p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="processLocationInput('${type}', ${index})" style="flex: 1; padding: 12px; background: #28a745; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                ✅ ยืนยัน
+                            </button>
+                            <button onclick="closeLocationModal()" style="flex: 1; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                ❌ ยกเลิก
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
             
-            // ในการใช้งานจริง ควรใช้ Google Maps JavaScript API
-            // หรือเปิดหน้าต่างใหม่ให้ผู้ใช้เลือกตำแหน่ง
-            const selectedLocation = prompt('กรุณาใส่ลิงก์ Google Maps หรือพิกัด (lat,lng):');
+            document.body.appendChild(modal);
+            window.currentLocationModal = modal;
+        }
+
+        function openGoogleMaps(type, index) {
+            // สร้าง URL สำหรับเปิด Google Maps
+            let mapUrl = 'https://www.google.com/maps/search/?api=1&query=';
             
-            if (selectedLocation) {
-                if (selectedLocation.includes('maps')) {
-                    // ดึงพิกัดจาก Google Maps URL (ตัวอย่างง่ายๆ)
-                    const coords = extractCoordsFromUrl(selectedLocation);
-                    if (coords) {
-                        handleLocationSelection(type, index, coords, selectedLocation);
-                    }
-                } else if (selectedLocation.includes(',')) {
-                    // รูปแบบ lat,lng
-                    const [lat, lng] = selectedLocation.split(',').map(coord => parseFloat(coord.trim()));
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        handleLocationSelection(type, index, {lat, lng}, `พิกัด: ${lat}, ${lng}`);
-                    }
+            // เพิ่มตำแหน่งเริ่มต้น (ถ้ามี)
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    mapUrl += `${lat},${lng}`;
+                    
+                    // เปิดในหน้าต่างใหม่
+                    const mapWindow = window.open(mapUrl, '_blank', 'width=800,height=600');
+                    
+                    // แสดงข้อความแนะนำ
+                    alert('📍 คำแนะนำ:\n1. เลือกตำแหน่งที่ต้องการบน Google Maps\n2. คลิกเพื่อปักหมุด\n3. คัดลอกลิงก์หรือพิกัดมาใส่ในฟอร์ม\n4. กลับมายังหน้านี้เพื่อใส่ข้อมูล');
+                }, () => {
+                    // ถ้าไม่สามารถหาตำแหน่งได้
+                    mapUrl += 'Thailand';
+                    window.open(mapUrl, '_blank', 'width=800,height=600');
+                    alert('📍 คำแนะนำ:\n1. ค้นหาและเลือกตำแหน่งที่ต้องการ\n2. คลิกเพื่อปักหมุด\n3. คัดลอกลิงก์หรือพิกัดมาใส่ในฟอร์ม\n4. กลับมายังหน้านี้เพื่อใส่ข้อมูล');
+                });
+            } else {
+                mapUrl += 'Thailand';
+                window.open(mapUrl, '_blank', 'width=800,height=600');
+                alert('📍 คำแนะนำ:\n1. ค้นหาและเลือกตำแหน่งที่ต้องการ\n2. คลิกเพื่อปักหมุด\n3. คัดลอกลิงก์หรือพิกัดมาใส่ในฟอร์ม\n4. กลับมายังหน้านี้เพื่อใส่ข้อมูล');
+            }
+        }
+
+        function processLocationInput(type, index) {
+            const urlInput = document.getElementById('mapUrlInput').value.trim();
+            const coordsInput = document.getElementById('coordsInput').value.trim();
+            
+            let coords = null;
+            let displayText = '';
+            
+            if (urlInput && urlInput.includes('maps')) {
+                // ประมวลผล Google Maps URL
+                coords = extractCoordsFromUrl(urlInput);
+                if (coords) {
+                    displayText = `🗺️ ตำแหน่งจาก Google Maps`;
+                } else {
+                    alert('ไม่สามารถดึงพิกัดจากลิงก์ได้ กรุณาลองใหม่');
+                    return;
                 }
+            } else if (coordsInput && coordsInput.includes(',')) {
+                // ประมวลผลพิกัด
+                const [lat, lng] = coordsInput.split(',').map(coord => parseFloat(coord.trim()));
+                if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    coords = { lat, lng };
+                    displayText = `📍 พิกัด: ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                } else {
+                    alert('รูปแบบพิกัดไม่ถูกต้อง กรุณาใส่ในรูปแบบ lat, lng');
+                    return;
+                }
+            } else {
+                alert('กรุณาใส่ลิงก์ Google Maps หรือพิกัด');
+                return;
+            }
+            
+            if (coords) {
+                handleLocationSelection(type, index, coords, displayText);
+                closeLocationModal();
+            }
+        }
+
+        function closeLocationModal() {
+            if (window.currentLocationModal) {
+                document.body.removeChild(window.currentLocationModal);
+                window.currentLocationModal = null;
             }
         }
 
         function extractCoordsFromUrl(url) {
-            // ตัวอย่างการดึงพิกัดจาก Google Maps URL
-            const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            // รูปแบบต่างๆ ของ Google Maps URL
+            let match = null;
+            
+            // รูปแบบ: @lat,lng,zoom
+            match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
             if (match) {
                 return {
                     lat: parseFloat(match[1]),
                     lng: parseFloat(match[2])
                 };
             }
+            
+            // รูปแบบ: /place/name/@lat,lng
+            match = url.match(/\/place\/[^\/]+\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lng: parseFloat(match[2])
+                };
+            }
+            
+            // รูปแบบ: ?q=lat,lng
+            match = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lng: parseFloat(match[2])
+                };
+            }
+            
+            // รูปแบบ: ll=lat,lng
+            match = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lng: parseFloat(match[2])
+                };
+            }
+            
+            // รูปแบบ: center=lat,lng
+            match = url.match(/[?&]center=(-?\d+\.\d+)%2C(-?\d+\.\d+)/);
+            if (match) {
+                return {
+                    lat: parseFloat(match[1]),
+                    lng: parseFloat(match[2])
+                };
+            }
+            
             return null;
         }
 
@@ -770,7 +904,7 @@
 
         // เพิ่มฟังก์ชันสำหรับ Google Maps API (ตัวอย่าง)
         function initGoogleMaps() {
-            //โหลด Google Maps API
+            // โหลด Google Maps API
             const script = document.createElement('script');
             script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places`;
             document.head.appendChild(script);
