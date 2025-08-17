@@ -277,7 +277,7 @@
     <script>
         // --- CONFIGURATION ---
         const LIFF_ID = "2007906947-zQ0mRjXg"; 
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxjmYFuGG58q19PiZUB0tU0cn0Iwk2e0RjPTPCOdlWDe6sq2xBzgU21p8NtO0U9qIB7nA/exec"; // แก้ไขให้ถูกต้อง
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxJPRKqvuM7ebs-8EeqXN21snFPMps588T71Fd_7_vXNLagKPoPlMGkYgUvdK6VfTuIQ/exec"; // แก้ไขให้ถูกต้อง
         const INIT_TIMEOUT = 15000; // เพิ่มเป็น 15 วินาที
         const MAP_LOAD_TIMEOUT = 10000; // Timeout สำหรับแผนที่
 
@@ -344,11 +344,17 @@
                 await initializeLIFF();
 
                 // Step 4: Setup App
-                updateLoadingText("เตริยมแอปพลิเคชัน...");
+                updateLoadingText("เตรียมแอปพลิเคชัน...");
                 await setupApp();
 
                 addDebugLog("✅ App initialized successfully");
-                showLoading(false);
+                
+                // Force hide loading with delay to ensure everything is ready
+                setTimeout(() => {
+                    addDebugLog("🎉 Hiding loading overlay");
+                    showLoading(false);
+                    addDebugLog("🎊 App is now ready for use!");
+                }, 500);
 
             } catch (error) {
                 addDebugLog(`❌ Initialization failed: ${error.message}`);
@@ -452,25 +458,33 @@
         async function setupApp() {
             return new Promise(async (resolve, reject) => {
                 try {
+                    addDebugLog("🔄 Starting app setup...");
+                    
                     // Get user profile
+                    addDebugLog("👤 Getting user profile...");
                     const profile = await liff.getProfile();
                     senderNameInput.value = profile.displayName;
                     addDebugLog(`👤 Profile loaded: ${profile.displayName}`);
 
                     // Setup event listeners
+                    addDebugLog("🎯 Setting up event listeners...");
                     setupEventListeners();
-                    addDebugLog("🎯 Event listeners setup");
+                    addDebugLog("🎯 Event listeners setup complete");
 
                     // Add first destination
+                    addDebugLog("📍 Adding first destination...");
                     addDestination();
                     addDebugLog("📍 First destination added");
 
                     // Set default pickup time
+                    addDebugLog("⏰ Setting default pickup time...");
                     setDefaultPickupTime();
                     addDebugLog("⏰ Default pickup time set");
 
+                    addDebugLog("✅ App setup completed successfully");
                     resolve();
                 } catch (error) {
+                    addDebugLog(`❌ App setup failed: ${error.message}`);
                     reject(error);
                 }
             });
@@ -901,7 +915,16 @@
         }
 
         function showLoading(isLoading) { 
-            loadingOverlay.classList.toggle('hidden', !isLoading); 
+            addDebugLog(`🔄 showLoading called: ${isLoading}`);
+            
+            if (isLoading) {
+                loadingOverlay.classList.remove('hidden');
+                addDebugLog("👁️ Loading overlay shown");
+            } else {
+                loadingOverlay.classList.add('hidden');
+                addDebugLog("🚫 Loading overlay hidden");
+            }
+            
             if (!isLoading) {
                 updateLoadingText("กำลังโหลด...");
             }
@@ -915,6 +938,22 @@
                 '<i class="fas fa-check-circle"></i>';
             notificationModal.classList.add('show');
         }
+
+        // Add manual override button for testing
+        setTimeout(() => {
+            if (!loadingOverlay.classList.contains('hidden')) {
+                addDebugLog("⚠️ Loading still visible after 20 seconds - adding override button");
+                const overrideBtn = document.createElement('button');
+                overrideBtn.textContent = 'Force Close Loading (Debug)';
+                overrideBtn.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10001;background:red;color:white;padding:10px;border:none;border-radius:5px;cursor:pointer;';
+                overrideBtn.onclick = () => {
+                    addDebugLog("🛠️ Manual loading override triggered");
+                    showLoading(false);
+                    overrideBtn.remove();
+                };
+                document.body.appendChild(overrideBtn);
+            }
+        }, 20000);
 
         // Add error handling for uncaught errors
         window.addEventListener('error', (event) => {
