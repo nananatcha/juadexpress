@@ -5,16 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบรับส่งพัสดุ</title>
     
-    <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Longdo Map API -->
-    <script src="7fe4440cd70cb6961fe1fbfdcea94610"></script>
+    <script src="https://api.longdo.com/map/?key=7fe4440cd70cb6961fe1fbfdcea94610"></script>
 
-    <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-    <!-- Custom Styles -->
     <style>
         /* Use Inter font from Google Fonts */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
@@ -161,12 +157,11 @@
 
     <div class="container mx-auto max-w-lg p-4">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">จ้วด ส่งพัสดุ</h1>
+            <h1 class="text-3xl font-bold text-gray-800">สร้างรายการส่งพัสดุ</h1>
             <p class="text-gray-500 mt-1">กรุณากรอกข้อมูลให้ครบถ้วน</p>
         </header>
 
         <form id="deliveryForm">
-            <!-- Origin Section -->
             <div class="form-section">
                 <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
                     <i class="fas fa-box-open mr-3 text-green-500"></i>ข้อมูลต้นทาง
@@ -198,16 +193,13 @@
                 </div>
             </div>
 
-            <!-- Destinations Section -->
             <div id="destinations-container">
-                <!-- Destination items will be injected here -->
-            </div>
+                </div>
 
             <button type="button" id="addDestinationBtn" class="w-full py-3 mb-6 border-2 border-dashed border-green-400 text-green-600 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center justify-center">
                 <i class="fas fa-plus-circle mr-2"></i>เพิ่มปลายทาง
             </button>
 
-            <!-- Summary Section -->
             <div class="form-section">
                 <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
                     <i class="fas fa-receipt mr-3 text-green-500"></i>สรุปข้อมูล
@@ -230,7 +222,6 @@
         </form>
     </div>
 
-    <!-- Map Modal -->
     <div id="mapModal">
         <div class="modal-content">
             <div class="p-4 bg-white border-b flex items-center">
@@ -245,7 +236,6 @@
         </div>
     </div>
 
-    <!-- Notification Modal -->
     <div id="notification-modal">
         <div class="notification-content">
             <div id="notification-icon" class="icon"></div>
@@ -255,14 +245,11 @@
     </div>
 
 
-    <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
         // --- CONFIGURATION ---
-        // TODO: กรุณาใส่ค่าจริงของคุณที่นี่
         const LIFF_ID = "2007906947-zQ0mRjXg"; 
-        const LONGDO_MAP_API_KEY = document.querySelector('script[src*="longdo.com"]').src.split('key=')[1];
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxJPRKqvuM7ebs-8EeqXN21snFPMps588T71Fd_7_vXNLagKPoPlMGkYgUvdK6VfTuIQ/exec";
+        const GAS_WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
 
         // --- DOM ELEMENTS ---
         const form = document.getElementById('deliveryForm');
@@ -299,12 +286,18 @@
         async function initializeApp() {
             showLoading(true);
             try {
-                // Check for placeholder values before initializing
-                if (!LIFF_ID || LIFF_ID === "YOUR_LIFF_ID") {
+                // --- Robust API Key Checking ---
+                let longdoMapApiKey = "YOUR_LONGDO_MAP_API_KEY";
+                const longdoScript = document.querySelector('script[src*="longdo.com"]');
+                if (longdoScript && longdoScript.src.includes('key=')) {
+                    longdoMapApiKey = longdoScript.src.split('key=')[1];
+                }
+
+                if (LIFF_ID === "YOUR_LIFF_ID") {
                     throw new Error("Config Error: กรุณาใส่ LIFF ID ของคุณในโค้ด");
                 }
-                if (!LONGDO_MAP_API_KEY || LONGDO_MAP_API_KEY === "LONGDO_MAP_API_KEY") {
-                    throw new Error("Config Error: กรุณาใส่ Longdo Map API Key ของคุณในโค้ด");
+                if (longdoMapApiKey === "YOUR_LONGDO_MAP_API_KEY") {
+                    throw new Error("Config Error: ไม่สามารถโหลด Longdo Map ได้ กรุณาตรวจสอบ API Key");
                 }
 
                 await liff.init({ liffId: LIFF_ID });
@@ -326,7 +319,7 @@
             } catch (error) {
                 console.error("Initialization failed", error);
                 let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
-                if (error.message.includes("Config Error")) {
+                if (error.message && error.message.includes("Config Error")) {
                     errorMessage = error.message.replace("Config Error: ", "");
                 } else if (error.toString().includes("channel not found")) {
                     errorMessage = "เกิดข้อผิดพลาด: ไม่พบ LIFF Channel ID ของคุณ กรุณาตรวจสอบค่า LIFF_ID ให้ถูกต้อง";
@@ -604,6 +597,7 @@
                 // In a real scenario, you would remove 'no-cors' and handle CORS on your GAS backend
                 await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
+                    mode: 'no-cors', 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
