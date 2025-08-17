@@ -300,10 +300,10 @@
             showLoading(true);
             try {
                 // Check for placeholder values before initializing
-                if (LIFF_ID === "2007906947-zQ0mRjXg") {
+                if (!LIFF_ID || LIFF_ID === "YOUR_LIFF_ID") {
                     throw new Error("Config Error: กรุณาใส่ LIFF ID ของคุณในโค้ด");
                 }
-                if (LONGDO_MAP_API_KEY === "https://api.longdo.com/map/?key=7fe4440cd70cb6961fe1fbfdcea94610") {
+                if (LONGDO_MAP_API_KEY === "7fe4440cd70cb6961fe1fbfdcea94610") {
                     throw new Error("Config Error: กรุณาใส่ Longdo Map API Key ของคุณในโค้ด");
                 }
 
