@@ -303,7 +303,7 @@
                 if (!LIFF_ID || LIFF_ID === "YOUR_LIFF_ID") {
                     throw new Error("Config Error: กรุณาใส่ LIFF ID ของคุณในโค้ด");
                 }
-                if (LONGDO_MAP_API_KEY === "7fe4440cd70cb6961fe1fbfdcea94610") {
+                if (!LONGDO_MAP_API_KEY || LONGDO_MAP_API_KEY === "LONGDO_MAP_API_KEY") {
                     throw new Error("Config Error: กรุณาใส่ Longdo Map API Key ของคุณในโค้ด");
                 }
 
