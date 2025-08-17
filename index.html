@@ -1,405 +1,605 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Plus, Trash2, Clock, Phone, User, Package, Send } from 'lucide-react';
-
-const DeliveryApp = () => {
-  const [senderName, setSenderName] = useState('');
-  const [senderPhone, setSenderPhone] = useState('');
-  const [pickupDate, setPickupDate] = useState('');
-  const [pickupTime, setPickupTime] = useState('');
-  const [originLocation, setOriginLocation] = useState({ address: '', lat: null, lng: null });
-  const [destinations, setDestinations] = useState([
-    { name: '', phone: '', location: { address: '', lat: null, lng: null } }
-  ]);
-  const [totalCost, setTotalCost] = useState(0);
-  const [showSummary, setShowSummary] = useState(false);
-
-  // Mock LIFF initialization
-  useEffect(() => {
-    // In real implementation, use liff.getProfile()
-    setSenderName('สมชาย ใจดี');
-  }, []);
-
-  // Calculate shipping cost based on distance
-  const calculateShippingCost = (distance) => {
-    if (distance <= 5) return 30;
-    if (distance <= 12) return 30 + ((distance - 5) * 5);
-    if (distance === 13) return 30 + (7 * 5) + 10;
-    return 30 + (7 * 5) + 10 + ((distance - 13) * 15);
-  };
-
-  // Mock distance calculation (in real app, use Google Maps Distance Matrix API)
-  const mockCalculateDistance = (origin, destination) => {
-    if (!origin.lat || !destination.lat) return 0;
-    // Simple mock distance calculation
-    return Math.floor(Math.random() * 20) + 1;
-  };
-
-  // Update total cost when destinations change
-  useEffect(() => {
-    let total = 0;
-    destinations.forEach(dest => {
-      if (dest.location.lat && originLocation.lat) {
-        const distance = mockCalculateDistance(originLocation, dest.location);
-        total += calculateShippingCost(distance);
-      }
-    });
-    setTotalCost(total);
-  }, [destinations, originLocation]);
-
-  // Get current location
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        const { latitude, longitude } = position.coords;
-        // In real implementation, use reverse geocoding to get address
-        setOriginLocation({
-          address: `ตำแหน่งปัจจุบัน (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`,
-          lat: latitude,
-          lng: longitude
-        });
-      }, (error) => {
-        alert('ไม่สามารถดึงตำแหน่งปัจจุบันได้');
-      });
-    }
-  };
-
-  // Open Longdoo Map for location selection
-  const openLongdooMap = (type, index = null) => {
-    // Mock Longdoo Map integration
-    // In real implementation, integrate with Longdoo Map API
-    const mockAddress = `สถานที่ที่เลือก ${Math.floor(Math.random() * 100)}`;
-    const mockLat = 13.7563 + (Math.random() - 0.5) * 0.1;
-    const mockLng = 100.5018 + (Math.random() - 0.5) * 0.1;
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรับส่งพัสดุ</title>
     
-    if (type === 'origin') {
-      setOriginLocation({
-        address: mockAddress,
-        lat: mockLat,
-        lng: mockLng
-      });
-    } else if (type === 'destination' && index !== null) {
-      const newDestinations = [...destinations];
-      newDestinations[index].location = {
-        address: mockAddress,
-        lat: mockLat,
-        lng: mockLng
-      };
-      setDestinations(newDestinations);
-    }
-  };
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Longdo Map API -->
+    <script src="https://api.longdo.com/map/?key=7fe4440cd70cb6961fe1fbfdcea94610"></script>
 
-  // Add new destination
-  const addDestination = () => {
-    setDestinations([...destinations, { name: '', phone: '', location: { address: '', lat: null, lng: null } }]);
-  };
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-  // Remove destination
-  const removeDestination = (index) => {
-    if (destinations.length > 1) {
-      const newDestinations = destinations.filter((_, i) => i !== index);
-      setDestinations(newDestinations);
-    }
-  };
+    <!-- Custom Styles -->
+    <style>
+        /* Use Inter font from Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        /* Custom styles for better UX */
+        .form-section {
+            background-color: white;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .btn-primary {
+            background-color: #06C755; /* LINE Green */
+            color: white;
+            font-weight: 600;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            transition: background-color 0.3s;
+        }
+        .btn-primary:hover {
+            background-color: #05a546;
+        }
+        .btn-secondary {
+            background-color: #e9ecef;
+            color: #495057;
+            font-weight: 500;
+            border-radius: 0.5rem;
+            padding: 0.5rem 1rem;
+            transition: background-color 0.3s;
+        }
+        .btn-secondary:hover {
+            background-color: #dee2e6;
+        }
+        .input-field {
+            width: 100%;
+            border: 1px solid #ced4da;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #06C755;
+            box-shadow: 0 0 0 2px rgba(6, 199, 85, 0.2);
+        }
+        /* Modal styles */
+        #mapModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            position: relative;
+            background-color: #fefefe;
+            margin: auto;
+            border-radius: 0.5rem;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        #map {
+            flex-grow: 1;
+            width: 100%;
+        }
+        /* Loading overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #06C755;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
 
-  // Update destination data
-  const updateDestination = (index, field, value) => {
-    const newDestinations = [...destinations];
-    newDestinations[index][field] = value;
-    setDestinations(newDestinations);
-  };
-
-  // Submit form
-  const submitForm = async () => {
-    // Validate form
-    if (!senderPhone || !pickupDate || !pickupTime || !originLocation.lat) {
-      alert('กรุณากรอกข้อมูลต้นทางให้ครบถ้วน');
-      return;
-    }
-
-    for (let dest of destinations) {
-      if (!dest.name || !dest.phone || !dest.location.lat) {
-        alert('กรุณากรอกข้อมูลปลายทางให้ครบถ้วน');
-        return;
-      }
-    }
-
-    const formData = {
-      sender: {
-        name: senderName,
-        phone: senderPhone
-      },
-      pickup: {
-        date: pickupDate,
-        time: pickupTime,
-        location: originLocation
-      },
-      destinations: destinations,
-      totalCost: totalCost,
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      // In real implementation, send to Google Apps Script endpoint
-      const response = await fetch('YOUR_GOOGLE_APPS_SCRIPT_ENDPOINT', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-
-      if (response.ok) {
-        alert('บันทึกข้อมูลสำเร็จ!');
-        // Reset form or redirect
-      } else {
-        throw new Error('การส่งข้อมูลล้มเหลว');
-      }
-    } catch (error) {
-      alert('เกิดข้อผิดพลาดในการส่งข้อมูล: ' + error.message);
-    }
-  };
-
-  if (showSummary) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-md mx-auto bg-white rounded-xl shadow-sm">
-          <div className="p-6">
-            <div className="text-center mb-6">
-              <Package className="w-12 h-12 text-blue-600 mx-auto mb-2" />
-              <h2 className="text-xl font-semibold text-gray-800">สรุปรายการส่งพัสดุ</h2>
-            </div>
-
-            {/* Sender Info */}
-            <div className="mb-6">
-              <h3 className="font-medium text-gray-700 mb-2">ข้อมูลผู้ส่ง</h3>
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-600">ชื่อ: {senderName}</p>
-                <p className="text-sm text-gray-600">เบอร์: {senderPhone}</p>
-                <p className="text-sm text-gray-600">วันที่รับ: {pickupDate} เวลา {pickupTime}</p>
-                <p className="text-sm text-gray-600">ที่อยู่: {originLocation.address}</p>
-              </div>
-            </div>
-
-            {/* Destinations */}
-            <div className="mb-6">
-              <h3 className="font-medium text-gray-700 mb-2">ข้อมูลผู้รับ</h3>
-              {destinations.map((dest, index) => (
-                <div key={index} className="bg-gray-50 p-3 rounded-lg mb-2">
-                  <p className="text-sm text-gray-600">ชื่อ: {dest.name}</p>
-                  <p className="text-sm text-gray-600">เบอร์: {dest.phone}</p>
-                  <p className="text-sm text-gray-600">ที่อยู่: {dest.location.address}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Total Cost */}
-            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-medium text-gray-700">ค่าส่งรวม</span>
-                <span className="text-2xl font-bold text-blue-600">{totalCost} บาท</span>
-              </div>
-            </div>
-
-            {/* Buttons */}
-            <div className="space-y-3">
-              <button
-                onClick={submitForm}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center"
-              >
-                <Send className="w-5 h-5 mr-2" />
-                ยืนยันส่งคำสั่ง
-              </button>
-              <button
-                onClick={() => setShowSummary(false)}
-                className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-300 transition-colors"
-              >
-                กลับไปแก้ไข
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-md mx-auto bg-white rounded-xl shadow-sm">
-        <div className="p-6">
-          <div className="text-center mb-6">
-            <Package className="w-12 h-12 text-blue-600 mx-auto mb-2" />
-            <h1 className="text-xl font-semibold text-gray-800">ส่งพัสดุ</h1>
-          </div>
-
-          {/* Sender Information */}
-          <div className="mb-6">
-            <h2 className="text-lg font-medium text-gray-700 mb-4 flex items-center">
-              <User className="w-5 h-5 mr-2" />
-              ข้อมูลผู้ส่ง
-            </h2>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้ส่ง</label>
-                <input
-                  type="text"
-                  value={senderName}
-                  onChange={(e) => setSenderName(e.target.value)}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="ชื่อจาก Line Profile"
-                  readOnly
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">เบอร์ติดต่อ</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={senderPhone}
-                    onChange={(e) => setSenderPhone(e.target.value)}
-                    className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="หมายเลขโทรศัพท์"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">วันที่รับพัสดุ</label>
-                  <input
-                    type="date"
-                    value={pickupDate}
-                    onChange={(e) => setPickupDate(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-1">เวลา</label>
-                  <div className="relative">
-                    <Clock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-                    <input
-                      type="time"
-                      value={pickupTime}
-                      onChange={(e) => setPickupTime(e.target.value)}
-                      className="w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">แผนที่ต้นทาง</label>
-                <div className="space-y-2">
-                  <button
-                    onClick={getCurrentLocation}
-                    className="w-full p-3 border-2 border-dashed border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center"
-                  >
-                    <MapPin className="w-5 h-5 mr-2" />
-                    ใช้ตำแหน่งปัจจุบัน
-                  </button>
-                  <button
-                    onClick={() => openLongdooMap('origin')}
-                    className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    เลือกจากแผนที่
-                  </button>
-                  {originLocation.address && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-sm text-green-700">{originLocation.address}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Destinations */}
-          <div className="mb-6">
-            <h2 className="text-lg font-medium text-gray-700 mb-4 flex items-center">
-              <MapPin className="w-5 h-5 mr-2" />
-              ข้อมูลผู้รับ
-            </h2>
-
-            {destinations.map((dest, index) => (
-              <div key={index} className="mb-4 p-4 border border-gray-200 rounded-lg">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="font-medium text-gray-600">ปลายทางที่ {index + 1}</span>
-                  {destinations.length > 1 && (
-                    <button
-                      onClick={() => removeDestination(index)}
-                      className="text-red-500 hover:text-red-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={dest.name}
-                    onChange={(e) => updateDestination(index, 'name', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="ชื่อผู้รับ"
-                  />
-                  
-                  <input
-                    type="tel"
-                    value={dest.phone}
-                    onChange={(e) => updateDestination(index, 'phone', e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="เบอร์ติดต่อผู้รับ"
-                  />
-
-                  <div>
-                    <button
-                      onClick={() => openLongdooMap('destination', index)}
-                      className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-                    >
-                      เลือกที่อยู่จากแผนที่
-                    </button>
-                    {dest.location.address && (
-                      <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <p className="text-sm text-green-700">{dest.location.address}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            <button
-              onClick={addDestination}
-              className="w-full p-3 border-2 border-dashed border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center"
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              เพิ่มปลายทาง
-            </button>
-          </div>
-
-          {/* Total Cost */}
-          {totalCost > 0 && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-medium text-gray-700">ค่าส่งรวม</span>
-                <span className="text-2xl font-bold text-blue-600">{totalCost} บาท</span>
-              </div>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            onClick={() => setShowSummary(true)}
-            className="w-full bg-blue-600 text-white py-4 rounded-lg text-lg font-medium hover:bg-blue-700 transition-colors"
-          >
-            ดูสรุปและยืนยัน
-          </button>
-        </div>
-      </div>
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
     </div>
-  );
-};
 
-export default DeliveryApp;
+    <div class="container mx-auto max-w-lg p-4">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">สร้างรายการส่งพัสดุ</h1>
+            <p class="text-gray-500 mt-1">กรุณากรอกข้อมูลให้ครบถ้วน</p>
+        </header>
+
+        <form id="deliveryForm">
+            <!-- Origin Section -->
+            <div class="form-section">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
+                    <i class="fas fa-box-open mr-3 text-green-500"></i>ข้อมูลต้นทาง
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="senderName" class="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้ส่ง</label>
+                        <input type="text" id="senderName" class="input-field bg-gray-100" readonly>
+                    </div>
+                    <div>
+                        <label for="senderPhone" class="block text-sm font-medium text-gray-600 mb-1">เบอร์ติดต่อ</label>
+                        <input type="tel" id="senderPhone" class="input-field" placeholder="กรอกเบอร์โทรศัพท์" required>
+                    </div>
+                    <div>
+                        <label for="pickupTime" class="block text-sm font-medium text-gray-600 mb-1">เวลานัดรับ</label>
+                        <input type="datetime-local" id="pickupTime" class="input-field" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-2">แผนที่ต้นทาง</label>
+                        <div class="flex space-x-2">
+                            <button type="button" id="currentLocationBtn" class="btn-secondary w-full flex items-center justify-center"><i class="fas fa-location-arrow mr-2"></i>ตำแหน่งปัจจุบัน</button>
+                            <button type="button" id="originMapBtn" class="btn-secondary w-full flex items-center justify-center"><i class="fas fa-map-marked-alt mr-2"></i>เลือกจากแผนที่</button>
+                        </div>
+                        <div id="originAddress" class="mt-3 p-3 bg-gray-50 border rounded-lg text-gray-600 text-sm min-h-[40px]">
+                            ยังไม่ได้เลือกตำแหน่ง
+                        </div>
+                        <input type="hidden" id="originCoords">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Destinations Section -->
+            <div id="destinations-container">
+                <!-- Destination items will be injected here -->
+            </div>
+
+            <button type="button" id="addDestinationBtn" class="w-full py-3 mb-6 border-2 border-dashed border-green-400 text-green-600 font-semibold rounded-lg hover:bg-green-50 transition-colors flex items-center justify-center">
+                <i class="fas fa-plus-circle mr-2"></i>เพิ่มปลายทาง
+            </button>
+
+            <!-- Summary Section -->
+            <div class="form-section">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4 flex items-center">
+                    <i class="fas fa-receipt mr-3 text-green-500"></i>สรุปข้อมูล
+                </h2>
+                <div class="space-y-2 text-gray-700">
+                    <div class="flex justify-between">
+                        <span>ระยะทางรวม:</span>
+                        <span id="totalDistance" class="font-semibold">0.00 กม.</span>
+                    </div>
+                    <div class="flex justify-between text-xl">
+                        <span class="font-semibold">ค่าบริการ (โดยประมาณ):</span>
+                        <span id="shippingFee" class="font-bold text-green-600">฿0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-primary w-full text-lg">
+                ยืนยันและสร้างรายการ
+            </button>
+        </form>
+    </div>
+
+    <!-- Map Modal -->
+    <div id="mapModal">
+        <div class="modal-content">
+            <div class="p-4 bg-white border-b flex items-center">
+                <input type="text" id="mapSearch" class="input-field" placeholder="ค้นหาสถานที่...">
+                <button type="button" id="closeMapBtn" class="ml-2 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            </div>
+            <div id="map"></div>
+            <div class="p-4 bg-white border-t">
+                <div id="selectedMapAddress" class="mb-3 p-2 bg-gray-100 rounded-md text-sm text-gray-700">กรุณาปักหมุดบนแผนที่</div>
+                <button type="button" id="confirmLocationBtn" class="btn-primary w-full">ยืนยันตำแหน่งนี้</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script>
+        // --- CONFIGURATION ---
+        const LIFF_ID = "2007906947-zQ0mRjXg"; // TODO: ใส่ LIFF ID ของคุณที่นี่
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxJPRKqvuM7ebs-8EeqXN21snFPMps588T71Fd_7_vXNLagKPoPlMGkYgUvdK6VfTuIQ/exec"; // TODO: ใส่ URL ของ Backend ที่นี่
+
+        // --- DOM ELEMENTS ---
+        const form = document.getElementById('deliveryForm');
+        const senderNameInput = document.getElementById('senderName');
+        const pickupTimeInput = document.getElementById('pickupTime');
+        const addDestinationBtn = document.getElementById('addDestinationBtn');
+        const destinationsContainer = document.getElementById('destinations-container');
+        const totalDistanceEl = document.getElementById('totalDistance');
+        const shippingFeeEl = document.getElementById('shippingFee');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        
+        // Map Modal Elements
+        const mapModal = document.getElementById('mapModal');
+        const mapSearchInput = document.getElementById('mapSearch');
+        const closeMapBtn = document.getElementById('closeMapBtn');
+        const confirmLocationBtn = document.getElementById('confirmLocationBtn');
+        const selectedMapAddressEl = document.getElementById('selectedMapAddress');
+
+        // --- STATE VARIABLES ---
+        let destinationCounter = 0;
+        let map;
+        let currentMapTarget = null; // e.g., 'origin', 'destination-1'
+        let selectedLocation = null; // { lat, lon, address }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        async function initializeApp() {
+            showLoading(true);
+            try {
+                await liff.init({ liffId: LIFF_ID });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+                const profile = await liff.getProfile();
+                senderNameInput.value = profile.displayName;
+            } catch (error) {
+                console.error("LIFF Initialization failed", error);
+                alert("ไม่สามารถเชื่อมต่อกับ LINE ได้ กรุณาลองใหม่อีกครั้ง");
+            } finally {
+                setupEventListeners();
+                addDestination(); // Add the first destination by default
+                setDefaultPickupTime();
+                showLoading(false);
+            }
+        }
+
+        function setDefaultPickupTime() {
+            const now = new Date();
+            // Add 1 hour to current time
+            now.setHours(now.getHours() + 1);
+            // Format to YYYY-MM-DDTHH:MM
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            pickupTimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            addDestinationBtn.addEventListener('click', addDestination);
+            form.addEventListener('submit', handleFormSubmit);
+
+            // Origin buttons
+            document.getElementById('currentLocationBtn').addEventListener('click', getCurrentLocation);
+            document.getElementById('originMapBtn').addEventListener('click', () => openMapModal('origin'));
+
+            // Map modal buttons
+            closeMapBtn.addEventListener('click', closeMapModal);
+            confirmLocationBtn.addEventListener('click', confirmLocation);
+            mapSearchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    searchMap();
+                }
+            });
+        }
+
+        // --- DESTINATION MANAGEMENT ---
+        function addDestination() {
+            destinationCounter++;
+            const id = `destination-${destinationCounter}`;
+            const destinationHTML = `
+                <div class="form-section" id="${id}">
+                    <div class="flex justify-between items-center border-b pb-2 mb-4">
+                        <h2 class="text-xl font-semibold text-gray-700 flex items-center">
+                            <i class="fas fa-map-marker-alt mr-3 text-red-500"></i>ข้อมูลปลายทาง #${destinationCounter}
+                        </h2>
+                        ${destinationCounter > 1 ? `<button type="button" class="text-red-500 hover:text-red-700 remove-destination-btn" data-target="${id}">&times; ลบ</button>` : ''}
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label for="recipientName-${id}" class="block text-sm font-medium text-gray-600 mb-1">ชื่อผู้รับ</label>
+                            <input type="text" id="recipientName-${id}" class="input-field" placeholder="กรอกชื่อผู้รับ" required>
+                        </div>
+                        <div>
+                            <label for="recipientPhone-${id}" class="block text-sm font-medium text-gray-600 mb-1">เบอร์ติดต่อผู้รับ</label>
+                            <input type="tel" id="recipientPhone-${id}" class="input-field" placeholder="กรอกเบอร์โทรศัพท์" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 mb-2">แผนที่ปลายทาง</label>
+                            <button type="button" class="btn-secondary w-full destination-map-btn" data-target="${id}"><i class="fas fa-map-marked-alt mr-2"></i>เลือกจากแผนที่</button>
+                            <div id="address-${id}" class="mt-3 p-3 bg-gray-50 border rounded-lg text-gray-600 text-sm min-h-[40px]">
+                                ยังไม่ได้เลือกตำแหน่ง
+                            </div>
+                            <input type="hidden" id="coords-${id}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            destinationsContainer.insertAdjacentHTML('beforeend', destinationHTML);
+            
+            // Add event listeners for the new elements
+            document.querySelector(`.destination-map-btn[data-target="${id}"]`).addEventListener('click', () => openMapModal(id));
+            if (destinationCounter > 1) {
+                document.querySelector(`.remove-destination-btn[data-target="${id}"]`).addEventListener('click', (e) => removeDestination(e.target.dataset.target));
+            }
+        }
+
+        function removeDestination(id) {
+            document.getElementById(id).remove();
+            calculateTotal();
+        }
+
+        // --- LOCATION & MAP ---
+        function getCurrentLocation() {
+            showLoading(true);
+            if (!navigator.geolocation) {
+                alert("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง");
+                showLoading(false);
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const coords = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    };
+                    getAddressFromCoords(coords, (address) => {
+                        updateLocationUI('origin', coords, address);
+                        showLoading(false);
+                    });
+                },
+                () => {
+                    alert("ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS");
+                    showLoading(false);
+                }
+            );
+        }
+
+        function openMapModal(target) {
+            currentMapTarget = target;
+            mapModal.style.display = 'block';
+            if (!map) {
+                initMap();
+            }
+        }
+
+        function closeMapModal() {
+            mapModal.style.display = 'none';
+            selectedMapAddressEl.textContent = 'กรุณาปักหมุดบนแผนที่';
+            mapSearchInput.value = '';
+            selectedLocation = null;
+        }
+
+        function initMap() {
+            map = new longdo.Map({
+                placeholder: document.getElementById('map')
+            });
+            map.Event.bind('click', (e) => {
+                const location = map.location();
+                const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
+                map.Overlays.clear();
+                map.Overlays.add(marker);
+                map.zoom(16, true);
+                
+                const coords = { lat: location.lat, lon: location.lon };
+                getAddressFromCoords(coords, (address) => {
+                    selectedLocation = { ...coords, address };
+                    selectedMapAddressEl.textContent = address;
+                });
+            });
+        }
+
+        function searchMap() {
+            const keyword = mapSearchInput.value;
+            if (keyword) {
+                map.Search.search(keyword, {
+                    callback: (result) => {
+                        if (result.data.length > 0) {
+                            const firstResult = result.data[0];
+                            const location = { lat: firstResult.lat, lon: firstResult.lon };
+                            map.location(location, true);
+                            map.zoom(16, true);
+                            const marker = new longdo.Marker(location);
+                            map.Overlays.clear();
+                            map.Overlays.add(marker);
+                            
+                            getAddressFromCoords(location, (address) => {
+                                selectedLocation = { ...location, address };
+                                selectedMapAddressEl.textContent = address;
+                            });
+                        } else {
+                            alert('ไม่พบสถานที่ที่ค้นหา');
+                        }
+                    }
+                });
+            }
+        }
+
+        function getAddressFromCoords(coords, callback) {
+            map.Search.search(coords, {
+                callback: (result) => {
+                    const address = result.data.length > 0 ? `${result.data[0].name}, ${result.data[0].address}` : 'ไม่สามารถระบุที่อยู่ได้';
+                    callback(address);
+                }
+            });
+        }
+
+        function confirmLocation() {
+            if (selectedLocation && currentMapTarget) {
+                updateLocationUI(currentMapTarget, { lat: selectedLocation.lat, lon: selectedLocation.lon }, selectedLocation.address);
+                closeMapModal();
+            } else {
+                alert('กรุณาเลือกตำแหน่งบนแผนที่ก่อน');
+            }
+        }
+
+        function updateLocationUI(target, coords, address) {
+            if (target === 'origin') {
+                document.getElementById('originAddress').textContent = address;
+                document.getElementById('originCoords').value = `${coords.lat},${coords.lon}`;
+            } else {
+                document.getElementById(`address-${target}`).textContent = address;
+                document.getElementById(`coords-${target}`).value = `${coords.lat},${coords.lon}`;
+            }
+            calculateTotal();
+        }
+
+        // --- CALCULATION ---
+        function calculateTotal() {
+            const originCoordsStr = document.getElementById('originCoords').value;
+            if (!originCoordsStr) return;
+
+            const waypoints = [];
+            waypoints.push(longdo.Util.stringToLocation(originCoordsStr));
+
+            const destinationElements = document.querySelectorAll('[id^="destination-"]');
+            destinationElements.forEach(el => {
+                const coordsStr = el.querySelector('[id^="coords-"]').value;
+                if (coordsStr) {
+                    waypoints.push(longdo.Util.stringToLocation(coordsStr));
+                }
+            });
+
+            if (waypoints.length < 2) {
+                totalDistanceEl.textContent = '0.00 กม.';
+                shippingFeeEl.textContent = '฿0.00';
+                return;
+            }
+
+            if (!map) {
+                map = new longdo.Map({
+                    placeholder: document.createElement('div')
+                });
+            }
+
+            map.Route.get({
+                locationList: waypoints,
+                callback: (result) => {
+                    const distanceKm = result.distance / 1000;
+                    const fee = calculateFee(distanceKm);
+                    totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
+                    shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
+                }
+            });
+        }
+
+        function calculateFee(km) {
+            if (km <= 0) return 0;
+            if (km <= 5) return 30;
+
+            let fee = 30;
+            // From 5.01 to 12.99 km
+            if (km > 5 && km < 13) {
+                fee += (km - 5) * 5;
+            } else if (km >= 13) {
+                // Fee for first 12km
+                fee += (12 - 5) * 5; // 30 + 35 = 65
+                
+                // Fee for 13th km
+                fee += 10; // 75
+                
+                // Fee for > 13 km
+                if (km > 13) {
+                    fee += (km - 13) * 15;
+                }
+            }
+            return fee;
+        }
+
+        // --- FORM SUBMISSION ---
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            showLoading(true);
+
+            // --- Data Aggregation ---
+            const originCoords = document.getElementById('originCoords').value.split(',');
+            const formData = {
+                origin: {
+                    name: senderNameInput.value,
+                    phone: document.getElementById('senderPhone').value,
+                    pickupTime: pickupTimeInput.value,
+                    address: document.getElementById('originAddress').textContent,
+                    lat: originCoords[0] ? parseFloat(originCoords[0]) : null,
+                    lon: originCoords[1] ? parseFloat(originCoords[1]) : null,
+                },
+                destinations: [],
+                summary: {
+                    totalDistance: totalDistanceEl.textContent,
+                    shippingFee: shippingFeeEl.textContent,
+                }
+            };
+            
+            let isFormValid = true;
+            if (!formData.origin.phone || !formData.origin.pickupTime || !formData.origin.lat) {
+                isFormValid = false;
+            }
+
+            const destinationElements = document.querySelectorAll('[id^="destination-"]');
+            destinationElements.forEach(el => {
+                const id = el.id;
+                const destCoords = document.getElementById(`coords-${id}`).value.split(',');
+                const destinationData = {
+                    name: document.getElementById(`recipientName-${id}`).value,
+                    phone: document.getElementById(`recipientPhone-${id}`).value,
+                    address: document.getElementById(`address-${id}`).textContent,
+                    lat: destCoords[0] ? parseFloat(destCoords[0]) : null,
+                    lon: destCoords[1] ? parseFloat(destCoords[1]) : null,
+                };
+                if (!destinationData.name || !destinationData.phone || !destinationData.lat) {
+                    isFormValid = false;
+                }
+                formData.destinations.push(destinationData);
+            });
+            
+            if (!isFormValid) {
+                alert('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง และปักหมุดให้ครบทุกจุดหมาย');
+                showLoading(false);
+                return;
+            }
+
+            // --- API Call ---
+            try {
+                const response = await fetch(GAS_WEB_APP_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Important for simple GAS POST requests
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                // Note: with no-cors, we can't read the response. We assume it's successful.
+                alert('สร้างรายการสำเร็จ!');
+                if (liff.isInClient()) {
+                    liff.closeWindow();
+                }
+
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                alert('เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- UTILITY ---
+        function showLoading(isLoading) {
+            loadingOverlay.classList.toggle('hidden', !isLoading);
+        }
+
+    </script>
+</body>
+</html>
