@@ -16,13 +16,11 @@
 
     <!-- Custom Styles -->
     <style>
-        /* Use Inter font from Google Fonts */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap');
         body {
             font-family: 'Sarabun', 'Inter', sans-serif;
             background-color: #f8f9fa;
         }
-        /* Custom styles for better UX */
         .form-section {
             background-color: white;
             border-radius: 0.75rem;
@@ -31,7 +29,7 @@
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         }
         .btn-primary {
-            background-color: #06C755; /* LINE Green */
+            background-color: #06C755;
             color: white;
             font-weight: 600;
             border-radius: 0.5rem;
@@ -64,7 +62,6 @@
             border-color: #06C755;
             box-shadow: 0 0 0 2px rgba(6, 199, 85, 0.2);
         }
-        /* Modal styles */
         #mapModal {
             display: none;
             position: fixed;
@@ -90,7 +87,6 @@
             flex-grow: 1;
             width: 100%;
         }
-        /* Loading overlay */
         #loading-overlay {
             position: fixed;
             top: 0;
@@ -99,6 +95,7 @@
             height: 100%;
             background: rgba(255, 255, 255, 0.8);
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 9999;
@@ -115,8 +112,11 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        /* Notification Modal */
+        .loading-text {
+            margin-top: 1rem;
+            color: #6B7280;
+            font-size: 0.9rem;
+        }
         #notification-modal {
             position: fixed;
             top: 0;
@@ -151,12 +151,27 @@
         }
         .notification-content .icon.success { color: #10B981; }
         .notification-content .icon.error { color: #EF4444; }
+
+        /* Debug info */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+            z-index: 1001;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
 
     <div id="loading-overlay" class="hidden">
         <div class="spinner"></div>
+        <div id="loading-text" class="loading-text">กำลังโหลด...</div>
     </div>
 
     <div class="container mx-auto max-w-lg p-4">
@@ -254,14 +269,17 @@
         </div>
     </div>
 
+    <!-- Debug Info -->
+    <div id="debug-info" class="debug-info" style="display: none;"></div>
 
     <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
         // --- CONFIGURATION ---
         const LIFF_ID = "2007906947-zQ0mRjXg"; 
-        const GAS_WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
-        const INIT_TIMEOUT = 10000; // 10 seconds
+        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"; // แก้ไขให้ถูกต้อง
+        const INIT_TIMEOUT = 15000; // เพิ่มเป็น 15 วินาที
+        const MAP_LOAD_TIMEOUT = 10000; // Timeout สำหรับแผนที่
 
         // --- DOM ELEMENTS ---
         const form = document.getElementById('deliveryForm');
@@ -272,83 +290,210 @@
         const totalDistanceEl = document.getElementById('totalDistance');
         const shippingFeeEl = document.getElementById('shippingFee');
         const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
         const notificationModal = document.getElementById('notification-modal');
         const notificationIcon = document.getElementById('notification-icon');
         const notificationMessage = document.getElementById('notification-message');
         const notificationCloseBtn = document.getElementById('notification-close-btn');
+        const debugInfo = document.getElementById('debug-info');
 
         // --- STATE VARIABLES ---
         let destinationCounter = 0;
         let map;
         let currentMapTarget = null;
         let selectedLocation = null;
+        let mapApiLoaded = false;
+
+        // --- DEBUG FUNCTIONS ---
+        function addDebugLog(message) {
+            console.log(message);
+            const timestamp = new Date().toLocaleTimeString();
+            debugInfo.innerHTML += `[${timestamp}] ${message}<br>`;
+            debugInfo.style.display = 'block';
+            // Keep only last 10 messages
+            const lines = debugInfo.innerHTML.split('<br>');
+            if (lines.length > 10) {
+                debugInfo.innerHTML = lines.slice(-10).join('<br>');
+            }
+        }
+
+        function updateLoadingText(text) {
+            loadingText.textContent = text;
+            addDebugLog(text);
+        }
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', initializeApp);
 
         async function initializeApp() {
-            console.log("App initialization started.");
-            showLoading(true);
-
             try {
-                // --- Configuration Check ---
-                console.log("Checking configuration...");
-                const longdoScript = document.querySelector('script[src*="longdo.com"]');
-                if (LIFF_ID === "YOUR_LIFF_ID") {
-                    throw new Error("Config Error: กรุณาใส่ LIFF ID ของคุณในโค้ด");
-                }
-                if (!longdoScript || !longdoScript.src.includes('key=') || longdoScript.src.includes("YOUR_LONGDO_MAP_API_KEY")) {
-                    throw new Error("Config Error: ไม่สามารถโหลด Longdo Map ได้ กรุณาตรวจสอบ API Key");
-                }
-                console.log("Configuration OK.");
+                addDebugLog("🚀 App initialization started");
+                showLoading(true);
+                updateLoadingText("กำลังเริ่มต้นแอป...");
 
-                // --- LIFF Initialization with Timeout ---
-                console.log("Initializing LIFF...");
-                const liffInitPromise = liff.init({ liffId: LIFF_ID });
-                const timeoutPromise = new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error("LIFF Init Timeout")), INIT_TIMEOUT)
-                );
-                
-                await Promise.race([liffInitPromise, timeoutPromise]);
-                console.log("LIFF Initialized successfully.");
+                // Step 1: Configuration Check
+                updateLoadingText("ตรวจสอบการตั้งค่า...");
+                await checkConfiguration();
 
-                if (!liff.isLoggedIn()) {
-                    console.log("User not logged in. Redirecting to login...");
-                    liff.login();
-                    return; // Stop execution, will reload after login
-                }
-                console.log("User is logged in.");
+                // Step 2: Check Map API
+                updateLoadingText("ตรวจสอบ Longdo Map API...");
+                await checkMapAPI();
 
-                // --- Post-Login Setup ---
-                const profile = await liff.getProfile();
-                senderNameInput.value = profile.displayName;
-                console.log("Profile loaded:", profile.displayName);
-                
-                setupEventListeners();
-                addDestination();
-                setDefaultPickupTime();
-                console.log("App is ready.");
+                // Step 3: LIFF Initialization
+                updateLoadingText("เชื่อมต่อกับ LINE...");
+                await initializeLIFF();
+
+                // Step 4: Setup App
+                updateLoadingText("เตริยมแอปพลิเคชัน...");
+                await setupApp();
+
+                addDebugLog("✅ App initialized successfully");
+                showLoading(false);
 
             } catch (error) {
-                console.error("Initialization failed:", error);
-                let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
-                if (error.message) {
-                    if (error.message.includes("Config Error")) {
-                        errorMessage = error.message.replace("Config Error: ", "");
-                    } else if (error.message.includes("LIFF Init Timeout")) {
-                        errorMessage = "การเชื่อมต่อกับ LINE ล่าช้าเกินไป กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง";
-                    } else if (error.message.includes("channel not found")) {
-                        errorMessage = "เกิดข้อผิดพลาด: ไม่พบ LIFF Channel ID ของคุณ กรุณาตรวจสอบค่า LIFF_ID ให้ถูกต้อง";
-                    } else {
-                        errorMessage = error.message;
-                    }
-                }
-                showMessage(errorMessage, true);
-            } finally {
-                // This block ensures the loading overlay is always hidden.
-                console.log("Initialization finished. Hiding loading overlay.");
-                showLoading(false);
+                addDebugLog(`❌ Initialization failed: ${error.message}`);
+                handleInitializationError(error);
             }
+        }
+
+        async function checkConfiguration() {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (LIFF_ID === "YOUR_LIFF_ID" || LIFF_ID === "") {
+                        throw new Error("กรุณาใส่ LIFF ID ของคุณในโค้ด");
+                    }
+                    
+                    if (GAS_WEB_APP_URL.includes("YOUR_SCRIPT_ID")) {
+                        console.warn("⚠️ Google Apps Script URL ยังไม่ได้ตั้งค่า - ฟังก์ชันส่งข้อมูลจะไม่ทำงาน");
+                    }
+
+                    addDebugLog("✅ Configuration check passed");
+                    setTimeout(resolve, 500); // Simulate async operation
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        async function checkMapAPI() {
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error("Longdo Map API โหลดล่าช้าเกินไป - อาจเป็นปัญหาเครือข่ายหรือ API Key"));
+                }, MAP_LOAD_TIMEOUT);
+
+                try {
+                    if (typeof longdo === 'undefined') {
+                        throw new Error("ไม่สามารถโหลด Longdo Map API ได้ - กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต");
+                    }
+
+                    // Test map creation
+                    const testDiv = document.createElement('div');
+                    testDiv.style.width = '1px';
+                    testDiv.style.height = '1px';
+                    testDiv.style.visibility = 'hidden';
+                    document.body.appendChild(testDiv);
+
+                    const testMap = new longdo.Map({ 
+                        placeholder: testDiv,
+                        zoom: 10,
+                        location: { lat: 13.7563, lon: 100.5018 }
+                    });
+
+                    setTimeout(() => {
+                        document.body.removeChild(testDiv);
+                        mapApiLoaded = true;
+                        addDebugLog("✅ Longdo Map API is working");
+                        clearTimeout(timeout);
+                        resolve();
+                    }, 1000);
+
+                } catch (error) {
+                    clearTimeout(timeout);
+                    reject(new Error(`Longdo Map API Error: ${error.message}`));
+                }
+            });
+        }
+
+        async function initializeLIFF() {
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error("การเชื่อมต่อกับ LINE ล่าช้าเกินไป"));
+                }, INIT_TIMEOUT);
+
+                liff.init({ liffId: LIFF_ID })
+                    .then(() => {
+                        clearTimeout(timeout);
+                        addDebugLog("✅ LIFF initialized successfully");
+                        
+                        if (!liff.isLoggedIn()) {
+                            addDebugLog("🔐 User not logged in, redirecting...");
+                            liff.login();
+                            return;
+                        }
+                        
+                        addDebugLog("👤 User is logged in");
+                        resolve();
+                    })
+                    .catch((error) => {
+                        clearTimeout(timeout);
+                        let errorMessage = "เกิดข้อผิดพลาดในการเชื่อมต่อกับ LINE";
+                        
+                        if (error.message.includes("channel not found")) {
+                            errorMessage = "ไม่พบ LIFF Channel - กรุณาตรวจสอบ LIFF ID";
+                        } else if (error.message.includes("network")) {
+                            errorMessage = "ปัญหาการเชื่อมต่ออินเทอร์เน็ต";
+                        }
+                        
+                        reject(new Error(errorMessage));
+                    });
+            });
+        }
+
+        async function setupApp() {
+            return new Promise(async (resolve, reject) => {
+                try {
+                    // Get user profile
+                    const profile = await liff.getProfile();
+                    senderNameInput.value = profile.displayName;
+                    addDebugLog(`👤 Profile loaded: ${profile.displayName}`);
+
+                    // Setup event listeners
+                    setupEventListeners();
+                    addDebugLog("🎯 Event listeners setup");
+
+                    // Add first destination
+                    addDestination();
+                    addDebugLog("📍 First destination added");
+
+                    // Set default pickup time
+                    setDefaultPickupTime();
+                    addDebugLog("⏰ Default pickup time set");
+
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
+
+        function handleInitializationError(error) {
+            console.error("Initialization failed:", error);
+            
+            let errorMessage = "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง";
+            
+            if (error.message) {
+                errorMessage = error.message;
+            }
+
+            showMessage(errorMessage, true);
+            showLoading(false);
+
+            // Show retry option after 3 seconds
+            setTimeout(() => {
+                if (confirm("ต้องการลองใหม่หรือไม่?")) {
+                    location.reload();
+                }
+            }, 3000);
         }
 
         function setDefaultPickupTime() {
@@ -374,9 +519,6 @@
             });
             notificationCloseBtn.addEventListener('click', () => notificationModal.classList.remove('show'));
         }
-
-        // --- All other functions (addDestination, removeDestination, map functions, etc.) remain the same ---
-        // They are included here for completeness.
         
         function addDestination() {
             destinationCounter++;
@@ -402,140 +544,388 @@
             }
         }
 
-        function removeDestination(id) { document.getElementById(id).remove(); calculateTotal(); }
+        function removeDestination(id) { 
+            document.getElementById(id).remove(); 
+            calculateTotal(); 
+        }
 
         function getCurrentLocation() {
             showLoading(true);
-            if (!navigator.geolocation) { showMessage("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง", true); showLoading(false); return; }
+            updateLoadingText("กำลังค้นหาตำแหน่งปัจจุบัน...");
+            
+            if (!navigator.geolocation) { 
+                showMessage("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง", true); 
+                showLoading(false); 
+                return; 
+            }
+            
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 60000
+            };
+            
             navigator.geolocation.getCurrentPosition(
                 position => {
                     const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    getAddressFromCoords(coords, (address) => { updateLocationUI('origin', coords, address); showLoading(false); });
+                    addDebugLog(`📍 Got current location: ${coords.lat}, ${coords.lon}`);
+                    getAddressFromCoords(coords, (address) => { 
+                        updateLocationUI('origin', coords, address); 
+                        showLoading(false); 
+                    });
                 },
-                () => { showMessage("ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS", true); showLoading(false); }
+                (error) => {
+                    addDebugLog(`❌ Geolocation error: ${error.message}`);
+                    let errorMsg = "ไม่สามารถดึงตำแหน่งปัจจุบันได้";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        errorMsg = "กรุณาอนุญาตให้เข้าถึงตำแหน่งในเบราว์เซอร์";
+                    } else if (error.code === error.TIMEOUT) {
+                        errorMsg = "การค้นหาตำแหน่งใช้เวลานานเกินไป";
+                    }
+                    showMessage(errorMsg, true); 
+                    showLoading(false); 
+                },
+                options
             );
         }
 
-        function openMapModal(target) { currentMapTarget = target; document.getElementById('mapModal').style.display = 'block'; if (!map) initMap(); }
-        function closeMapModal() { document.getElementById('mapModal').style.display = 'none'; document.getElementById('selectedMapAddress').textContent = 'กรุณาปักหมุดบนแผนที่'; document.getElementById('mapSearch').value = ''; selectedLocation = null; }
+        function openMapModal(target) { 
+            if (!mapApiLoaded) {
+                showMessage("แผนที่ยังไม่พร้อมใช้งาน กรุณาลองอีกครั้งในภายหลัง", true);
+                return;
+            }
+            currentMapTarget = target; 
+            document.getElementById('mapModal').style.display = 'block'; 
+            if (!map) initMap(); 
+        }
+
+        function closeMapModal() { 
+            document.getElementById('mapModal').style.display = 'none'; 
+            document.getElementById('selectedMapAddress').textContent = 'กรุณาปักหมุดบนแผนที่'; 
+            document.getElementById('mapSearch').value = ''; 
+            selectedLocation = null; 
+        }
 
         function initMap() {
-            map = new longdo.Map({ placeholder: document.getElementById('map') });
-            map.Event.bind('click', (e) => {
-                const location = map.location();
-                const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
-                map.Overlays.clear(); map.Overlays.add(marker); map.zoom(16, true);
-                const coords = { lat: location.lat, lon: location.lon };
-                getAddressFromCoords(coords, (address) => { selectedLocation = { ...coords, address }; document.getElementById('selectedMapAddress').textContent = address; });
-            });
+            try {
+                map = new longdo.Map({ 
+                    placeholder: document.getElementById('map'),
+                    zoom: 13,
+                    location: { lat: 13.7563, lon: 100.5018 } // Default to Bangkok
+                });
+                
+                map.Event.bind('click', (e) => {
+                    const location = map.location();
+                    const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
+                    map.Overlays.clear(); 
+                    map.Overlays.add(marker); 
+                    map.zoom(16, true);
+                    const coords = { lat: location.lat, lon: location.lon };
+                    getAddressFromCoords(coords, (address) => { 
+                        selectedLocation = { ...coords, address }; 
+                        document.getElementById('selectedMapAddress').textContent = address; 
+                    });
+                });
+                
+                addDebugLog("🗺️ Map initialized successfully");
+            } catch (error) {
+                addDebugLog(`❌ Map initialization failed: ${error.message}`);
+                showMessage("ไม่สามารถเปิดแผนที่ได้ กรุณาลองอีกครั้ง", true);
+            }
         }
 
         function searchMap() {
             const keyword = document.getElementById('mapSearch').value;
             if (!keyword) return;
-            map.Search.search(keyword, {
-                callback: (result) => {
-                    if (result.data.length > 0) {
-                        const firstResult = result.data[0];
-                        const location = { lat: firstResult.lat, lon: firstResult.lon };
-                        map.location(location, true); map.zoom(16, true);
-                        const marker = new longdo.Marker(location);
-                        map.Overlays.clear(); map.Overlays.add(marker);
-                        getAddressFromCoords(location, (address) => { selectedLocation = { ...location, address }; document.getElementById('selectedMapAddress').textContent = address; });
-                    } else { showMessage('ไม่พบสถานที่ที่ค้นหา', true); }
-                }
-            });
+            
+            addDebugLog(`🔍 Searching map for: ${keyword}`);
+            
+            try {
+                map.Search.search(keyword, {
+                    callback: (result) => {
+                        if (result.data.length > 0) {
+                            const firstResult = result.data[0];
+                            const location = { lat: firstResult.lat, lon: firstResult.lon };
+                            map.location(location, true); 
+                            map.zoom(16, true);
+                            const marker = new longdo.Marker(location);
+                            map.Overlays.clear(); 
+                            map.Overlays.add(marker);
+                            getAddressFromCoords(location, (address) => { 
+                                selectedLocation = { ...location, address }; 
+                                document.getElementById('selectedMapAddress').textContent = address; 
+                            });
+                            addDebugLog(`✅ Found location: ${firstResult.name}`);
+                        } else { 
+                            showMessage('ไม่พบสถานที่ที่ค้นหา', true); 
+                        }
+                    },
+                    error: (error) => {
+                        addDebugLog(`❌ Map search error: ${error.message}`);
+                        showMessage('เกิดข้อผิดพลาดในการค้นหา', true);
+                    }
+                });
+            } catch (error) {
+                addDebugLog(`❌ Map search failed: ${error.message}`);
+                showMessage('ไม่สามารถค้นหาได้ กรุณาลองอีกครั้ง', true);
+            }
         }
 
         function getAddressFromCoords(coords, callback) {
-            map.Search.search(coords, {
-                callback: (result) => {
-                    const address = result.data.length > 0 ? `${result.data[0].name}, ${result.data[0].address}` : 'ไม่สามารถระบุที่อยู่ได้';
-                    callback(address);
-                }
-            });
+            if (!mapApiLoaded) {
+                callback('ไม่สามารถระบุที่อยู่ได้');
+                return;
+            }
+            
+            try {
+                map.Search.search(coords, {
+                    callback: (result) => {
+                        const address = result.data.length > 0 ? 
+                            `${result.data[0].name}, ${result.data[0].address}` : 
+                            'ไม่สามารถระบุที่อยู่ได้';
+                        callback(address);
+                    },
+                    error: (error) => {
+                        addDebugLog(`❌ Address lookup error: ${error.message}`);
+                        callback('ไม่สามารถระบุที่อยู่ได้');
+                    }
+                });
+            } catch (error) {
+                addDebugLog(`❌ Address lookup failed: ${error.message}`);
+                callback('ไม่สามารถระบุที่อยู่ได้');
+            }
         }
 
         function confirmLocation() {
-            if (selectedLocation && currentMapTarget) { updateLocationUI(currentMapTarget, { lat: selectedLocation.lat, lon: selectedLocation.lon }, selectedLocation.address); closeMapModal(); } 
-            else { showMessage('กรุณาเลือกตำแหน่งบนแผนที่ก่อน', true); }
+            if (selectedLocation && currentMapTarget) { 
+                updateLocationUI(currentMapTarget, 
+                    { lat: selectedLocation.lat, lon: selectedLocation.lon }, 
+                    selectedLocation.address
+                ); 
+                closeMapModal(); 
+            } else { 
+                showMessage('กรุณาเลือกตำแหน่งบนแผนที่ก่อน', true); 
+            }
         }
 
         function updateLocationUI(target, coords, address) {
-            const addressEl = (target === 'origin') ? document.getElementById('originAddress') : document.getElementById(`address-${target}`);
-            const coordsEl = (target === 'origin') ? document.getElementById('originCoords') : document.getElementById(`coords-${target}`);
+            const addressEl = (target === 'origin') ? 
+                document.getElementById('originAddress') : 
+                document.getElementById(`address-${target}`);
+            const coordsEl = (target === 'origin') ? 
+                document.getElementById('originCoords') : 
+                document.getElementById(`coords-${target}`);
+            
             addressEl.textContent = address;
             coordsEl.value = `${coords.lat},${coords.lon}`;
+            
+            addDebugLog(`📍 Location updated for ${target}: ${address}`);
             calculateTotal();
         }
 
         function calculateTotal() {
             const originCoordsStr = document.getElementById('originCoords').value;
-            if (!originCoordsStr) return;
+            if (!originCoordsStr) {
+                totalDistanceEl.textContent = '0.00 กม.';
+                shippingFeeEl.textContent = '฿0.00';
+                return;
+            }
+
             const waypoints = [longdo.Util.stringToLocation(originCoordsStr)];
             document.querySelectorAll('[id^="destination-"]').forEach(el => {
                 const coordsStr = el.querySelector('[id^="coords-"]').value;
                 if (coordsStr) waypoints.push(longdo.Util.stringToLocation(coordsStr));
             });
-            if (waypoints.length < 2) { totalDistanceEl.textContent = '0.00 กม.'; shippingFeeEl.textContent = '฿0.00'; return; }
-            if (!map) map = new longdo.Map({ placeholder: document.createElement('div') });
-            map.Route.get({
-                locationList: waypoints,
-                callback: (result) => {
-                    const distanceKm = result.distance / 1000;
-                    const fee = calculateFee(distanceKm);
-                    totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
-                    shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
-                }
-            });
+
+            if (waypoints.length < 2) { 
+                totalDistanceEl.textContent = '0.00 กม.'; 
+                shippingFeeEl.textContent = '฿0.00'; 
+                return; 
+            }
+
+            if (!mapApiLoaded || !map) {
+                // Fallback: simple distance calculation
+                calculateSimpleDistance(waypoints);
+                return;
+            }
+
+            try {
+                map.Route.get({
+                    locationList: waypoints,
+                    callback: (result) => {
+                        if (result && result.distance) {
+                            const distanceKm = result.distance / 1000;
+                            const fee = calculateFee(distanceKm);
+                            totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
+                            shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
+                            addDebugLog(`💰 Distance: ${distanceKm.toFixed(2)}km, Fee: ฿${fee.toFixed(2)}`);
+                        } else {
+                            calculateSimpleDistance(waypoints);
+                        }
+                    },
+                    error: (error) => {
+                        addDebugLog(`❌ Route calculation error: ${error.message}`);
+                        calculateSimpleDistance(waypoints);
+                    }
+                });
+            } catch (error) {
+                addDebugLog(`❌ Route calculation failed: ${error.message}`);
+                calculateSimpleDistance(waypoints);
+            }
+        }
+
+        function calculateSimpleDistance(waypoints) {
+            // Simple haversine distance calculation as fallback
+            let totalDistance = 0;
+            for (let i = 1; i < waypoints.length; i++) {
+                const d = haversineDistance(waypoints[i-1], waypoints[i]);
+                totalDistance += d;
+            }
+            const fee = calculateFee(totalDistance);
+            totalDistanceEl.textContent = `${totalDistance.toFixed(2)} กม. (ประมาณ)`;
+            shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
+            addDebugLog(`💰 Simple distance: ${totalDistance.toFixed(2)}km, Fee: ฿${fee.toFixed(2)}`);
+        }
+
+        function haversineDistance(pos1, pos2) {
+            const R = 6371; // Earth's radius in km
+            const dLat = (pos2.lat - pos1.lat) * Math.PI / 180;
+            const dLon = (pos2.lon - pos1.lon) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(pos1.lat * Math.PI / 180) * Math.cos(pos2.lat * Math.PI / 180) * 
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
         }
 
         function calculateFee(km) {
             if (km <= 0) return 0;
             if (km <= 5) return 30;
             let fee = 30;
-            if (km > 5 && km < 13) { fee += (km - 5) * 5; } 
-            else if (km >= 13) { fee += (12 - 5) * 5; fee += 10; if (km > 13) fee += (km - 13) * 15; }
+            if (km > 5 && km < 13) { 
+                fee += (km - 5) * 5; 
+            } else if (km >= 13) { 
+                fee += (12 - 5) * 5; 
+                fee += 10; 
+                if (km > 13) fee += (km - 13) * 15; 
+            }
             return fee;
         }
 
         async function handleFormSubmit(e) {
             e.preventDefault();
+            
+            addDebugLog("📝 Form submission started");
             showLoading(true);
-            const originCoords = document.getElementById('originCoords').value.split(',');
-            const formData = {
-                origin: { name: senderNameInput.value, phone: document.getElementById('senderPhone').value, pickupTime: pickupTimeInput.value, address: document.getElementById('originAddress').textContent, lat: originCoords[0] ? parseFloat(originCoords[0]) : null, lon: originCoords[1] ? parseFloat(originCoords[1]) : null },
-                destinations: [],
-                summary: { totalDistance: totalDistanceEl.textContent, shippingFee: shippingFeeEl.textContent }
-            };
-            let isFormValid = !!(formData.origin.phone && formData.origin.pickupTime && formData.origin.lat);
-            document.querySelectorAll('[id^="destination-"]').forEach(el => {
-                const id = el.id;
-                const destCoords = document.getElementById(`coords-${id}`).value.split(',');
-                const destinationData = { name: document.getElementById(`recipientName-${id}`).value, phone: document.getElementById(`recipientPhone-${id}`).value, address: document.getElementById(`address-${id}`).textContent, lat: destCoords[0] ? parseFloat(destCoords[0]) : null, lon: destCoords[1] ? parseFloat(destCoords[1]) : null };
-                if (!destinationData.name || !destinationData.phone || !destinationData.lat) isFormValid = false;
-                formData.destinations.push(destinationData);
-            });
-            if (!isFormValid) { showMessage('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง และปักหมุดให้ครบทุกจุดหมาย', true); showLoading(false); return; }
+            updateLoadingText("กำลังตรวจสอบข้อมูล...");
+
             try {
-                await fetch(GAS_WEB_APP_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-                showMessage('สร้างรายการสำเร็จ!', false);
-                setTimeout(() => { if (liff.isInClient()) liff.closeWindow(); }, 2000);
+                const originCoords = document.getElementById('originCoords').value.split(',');
+                const formData = {
+                    origin: { 
+                        name: senderNameInput.value, 
+                        phone: document.getElementById('senderPhone').value, 
+                        pickupTime: pickupTimeInput.value, 
+                        address: document.getElementById('originAddress').textContent, 
+                        lat: originCoords[0] ? parseFloat(originCoords[0]) : null, 
+                        lon: originCoords[1] ? parseFloat(originCoords[1]) : null 
+                    },
+                    destinations: [],
+                    summary: { 
+                        totalDistance: totalDistanceEl.textContent, 
+                        shippingFee: shippingFeeEl.textContent 
+                    }
+                };
+
+                let isFormValid = !!(formData.origin.phone && formData.origin.pickupTime && formData.origin.lat);
+                
+                document.querySelectorAll('[id^="destination-"]').forEach(el => {
+                    const id = el.id;
+                    const destCoords = document.getElementById(`coords-${id}`).value.split(',');
+                    const destinationData = { 
+                        name: document.getElementById(`recipientName-${id}`).value, 
+                        phone: document.getElementById(`recipientPhone-${id}`).value, 
+                        address: document.getElementById(`address-${id}`).textContent, 
+                        lat: destCoords[0] ? parseFloat(destCoords[0]) : null, 
+                        lon: destCoords[1] ? parseFloat(destCoords[1]) : null 
+                    };
+                    if (!destinationData.name || !destinationData.phone || !destinationData.lat) {
+                        isFormValid = false;
+                    }
+                    formData.destinations.push(destinationData);
+                });
+
+                if (!isFormValid) { 
+                    throw new Error('กรุณากรอกข้อมูลให้ครบถ้วนทุกช่อง และปักหมุดให้ครบทุกจุดหมาย'); 
+                }
+
+                updateLoadingText("กำลังส่งข้อมูล...");
+                
+                // Check if GAS URL is configured
+                if (GAS_WEB_APP_URL.includes("YOUR_SCRIPT_ID")) {
+                    addDebugLog("⚠️ Google Apps Script URL not configured - simulating success");
+                    // Simulate successful submission
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    showMessage('สร้างรายการสำเร็จ! (โหมดทดสอบ)', false);
+                } else {
+                    // Actual submission
+                    const response = await fetch(GAS_WEB_APP_URL, { 
+                        method: 'POST', 
+                        mode: 'no-cors', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify(formData) 
+                    });
+                    
+                    addDebugLog("✅ Form submitted successfully");
+                    showMessage('สร้างรายการสำเร็จ!', false);
+                }
+
+                // Close window after success
+                setTimeout(() => { 
+                    if (liff.isInClient()) {
+                        liff.closeWindow(); 
+                    } else {
+                        // For web browser testing
+                        if (confirm("ต้องการสร้างรายการใหม่หรือไม่?")) {
+                            location.reload();
+                        }
+                    }
+                }, 2000);
+
             } catch (error) {
-                console.error('Error submitting form:', error);
-                showMessage('เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง', true);
+                addDebugLog(`❌ Form submission failed: ${error.message}`);
+                showMessage(error.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง', true);
             } finally {
                 showLoading(false);
             }
         }
 
-        function showLoading(isLoading) { loadingOverlay.classList.toggle('hidden', !isLoading); }
+        function showLoading(isLoading) { 
+            loadingOverlay.classList.toggle('hidden', !isLoading); 
+            if (!isLoading) {
+                updateLoadingText("กำลังโหลด...");
+            }
+        }
+        
         function showMessage(message, isError = false) {
             notificationMessage.textContent = message;
             notificationIcon.className = isError ? 'icon error' : 'icon success';
-            notificationIcon.innerHTML = isError ? '<i class="fas fa-times-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+            notificationIcon.innerHTML = isError ? 
+                '<i class="fas fa-times-circle"></i>' : 
+                '<i class="fas fa-check-circle"></i>';
             notificationModal.classList.add('show');
         }
+
+        // Add error handling for uncaught errors
+        window.addEventListener('error', (event) => {
+            addDebugLog(`💥 Uncaught error: ${event.message}`);
+            console.error('Uncaught error:', event.error);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            addDebugLog(`💥 Unhandled promise rejection: ${event.reason}`);
+            console.error('Unhandled promise rejection:', event.reason);
+        });
 
     </script>
 </body>
