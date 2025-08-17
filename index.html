@@ -604,7 +604,6 @@
                 // In a real scenario, you would remove 'no-cors' and handle CORS on your GAS backend
                 await fetch(GAS_WEB_APP_URL, {
                     method: 'POST',
-                    mode: 'no-cors', 
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
