@@ -303,6 +303,7 @@
         // --- STATE VARIABLES ---
         let destinationCounter = 0;
         let map;
+        let route;
         let currentMapTarget = null;
         let selectedLocation = null;
         let mapApiLoaded = false;
@@ -623,14 +624,22 @@
             selectedLocation = null; 
         }
 
-        function initMap() {
+        
+function initMap() {
             try {
                 map = new longdo.Map({ 
                     placeholder: document.getElementById('map'),
                     zoom: 13,
                     location: { lat: 13.7563, lon: 100.5018 } // Default to Bangkok
                 });
-                
+
+                // สร้าง Route object
+                route = new longdo.Route({ 
+                    map: map,
+                    autoFit: true 
+                });
+                map.Route.add(route);
+
                 map.Event.bind('click', (e) => {
                     const location = map.location();
                     const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
@@ -643,8 +652,8 @@
                         document.getElementById('selectedMapAddress').textContent = address; 
                     });
                 });
-                
-                addDebugLog("🗺️ Map initialized successfully");
+
+                addDebugLog("🗺️ Map + Route initialized successfully");
             } catch (error) {
                 addDebugLog(`❌ Map initialization failed: ${error.message}`);
                 showMessage("ไม่สามารถเปิดแผนที่ได้ กรุณาลองอีกครั้ง", true);
@@ -740,7 +749,8 @@
             calculateTotal();
         }
 
-        function calculateTotal() {
+        
+function calculateTotal() {
             const originCoordsStr = document.getElementById('originCoords').value;
             if (!originCoordsStr) {
                 totalDistanceEl.textContent = '0.00 กม.';
@@ -760,33 +770,36 @@
                 return; 
             }
 
-            if (!mapApiLoaded || !map) {
-                // Fallback: simple distance calculation
-                calculateSimpleDistance(waypoints);
+            if (!mapApiLoaded || !route) {
+                calculateSimpleDistance(waypoints); // fallback
                 return;
             }
 
             try {
-                map.Route.get({
-                    locationList: waypoints,
-                    callback: (result) => {
-                        if (result && result.distance) {
-                            const distanceKm = result.distance / 1000;
-                            const fee = calculateFee(distanceKm);
-                            totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
-                            shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
-                            addDebugLog(`💰 Distance: ${distanceKm.toFixed(2)}km, Fee: ฿${fee.toFixed(2)}`);
-                        } else {
-                            calculateSimpleDistance(waypoints);
-                        }
-                    },
-                    error: (error) => {
-                        addDebugLog(`❌ Route calculation error: ${error.message}`);
-                        calculateSimpleDistance(waypoints);
-                    }
+                // ล้างเส้นทางเก่า
+                route.clear();
+
+                // เพิ่ม waypoint
+                waypoints.forEach(wp => route.add(wp));
+
+                // ค้นหาเส้นทาง
+                route.search();
+
+                // รอผลลัพธ์
+                route.Event.bind('guideComplete', () => {
+                    const distance = route.distance(); // หน่วยเมตร
+                    const duration = route.interval(); // หน่วยวินาที
+                    
+                    const distanceKm = distance / 1000;
+                    const fee = calculateFee(distanceKm);
+
+                    totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
+                    shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
+
+                    addDebugLog(`🚚 RoutingAPI distance: ${distanceKm.toFixed(2)} km, duration: ${Math.round(duration/60)} นาที, fee: ฿${fee.toFixed(2)}`);
                 });
             } catch (error) {
-                addDebugLog(`❌ Route calculation failed: ${error.message}`);
+                addDebugLog(`❌ Routing API error: ${error.message}`);
                 calculateSimpleDistance(waypoints);
             }
         }
