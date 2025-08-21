@@ -45,7 +45,7 @@
             font-weight: 500;
             border-radius: 0.5rem;
             padding: 0.5rem 1rem;
-            transition: background-color 0.3s;
+            transition: background-color: 0.3s;
         }
         .btn-secondary:hover {
             background-color: #dee2e6;
@@ -93,7 +93,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -252,7 +252,7 @@
     <script>
         // --- CONFIGURATION ---
         const LIFF_ID = "2007906947-zQ0mRjXg"; 
-        const GAS_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwxJPRKqvuM7ebs-8EeqXN21snFPMps588T71Fd_7_vXNLagKPoPlMGkYgUvdK6VfTuIQ/exec";
+        const GAS_WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
 
         // --- DOM ELEMENTS ---
         const form = document.getElementById('deliveryForm');
@@ -272,6 +272,7 @@
         // --- STATE VARIABLES ---
         let destinationCounter = 0;
         let map;
+        let route;
         let currentMapTarget = null;
         let selectedLocation = null;
         let isMapReady = false;
@@ -369,7 +370,6 @@
             navigator.geolocation.getCurrentPosition(
                 position => {
                     const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    // Ensure map is ready before getting address
                     if (!map || !isMapReady) {
                         initMap(() => {
                             getAddressFromCoords(coords, (address) => { 
@@ -394,7 +394,9 @@
         function openMapModal(target) { 
             currentMapTarget = target; 
             document.getElementById('mapModal').style.display = 'block'; 
-            if (!map) initMap(); 
+            if (!map) {
+                initMap();
+            }
         }
 
         function closeMapModal() { 
@@ -404,18 +406,17 @@
             selectedLocation = null; 
         }
 
-        function initMap(callback) {
+        // REWRITTEN: Map Initialization based on official documentation
+        function initMap(onReadyCallback) {
             try {
                 map = new longdo.Map({ 
                     placeholder: document.getElementById('map')
                 });
                 
-                // CRITICAL FIX: Wait for the map to be ready before enabling interactions
                 map.Event.bind('ready', () => {
                     isMapReady = true;
-                    console.log("Map is ready.");
+                    console.log("Map is ready and interactive.");
                     
-                    // Bind click event only when map is ready
                     map.Event.bind('click', (e) => {
                         const location = e.location();
                         const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
@@ -428,9 +429,8 @@
                         });
                     });
 
-                    // Execute callback if provided
-                    if (callback && typeof callback === 'function') {
-                        callback();
+                    if (onReadyCallback && typeof onReadyCallback === 'function') {
+                        onReadyCallback();
                     }
                 });
 
@@ -447,7 +447,7 @@
             }
             const keyword = document.getElementById('mapSearch').value;
             if (!keyword) return;
-            map.Search.search(keyword, {
+            longdo.Search.search(keyword, {
                 callback: (result) => {
                     if (result.data.length > 0) {
                         const firstResult = result.data[0];
@@ -468,16 +468,16 @@
             });
         }
 
+        // REWRITTEN: Using longdo.Geocode.reverse for address lookup
         function getAddressFromCoords(coords, callback) {
             if (!isMapReady) {
                 callback('แผนที่ยังไม่พร้อม');
                 return;
             }
-            map.Search.search(coords, {
+            longdo.Geocode.reverse(coords, {
                 callback: (result) => {
-                    const address = result.data.length > 0 ? 
-                        `${result.data[0].name ? result.data[0].name + ', ' : ''}${result.data[0].address}` : 
-                        'ไม่สามารถระบุที่อยู่ได้';
+                    const data = result.data;
+                    const address = data ? `${data.subdistrict}, ${data.district}, ${data.province}` : 'ไม่สามารถระบุที่อยู่ได้';
                     callback(address);
                 },
                 error: () => {
@@ -511,6 +511,7 @@
             calculateTotal();
         }
 
+        // REWRITTEN: Using longdo.Route object for calculation
         function calculateTotal() {
             if (!isMapReady) {
                 console.warn("Map not ready for calculation.");
@@ -536,17 +537,23 @@
                 shippingFeeEl.textContent = '฿0.00'; 
                 return; 
             }
+            
+            if (!route) {
+                route = new longdo.Route({ map: map });
+            }
+            
+            route.clear();
+            waypoints.forEach(wp => route.add(wp));
 
-            map.Route.get({
-                locationList: waypoints,
-                callback: (result) => {
-                    const distanceKm = result.distance / 1000;
+            route.search((result) => {
+                const data = result.data;
+                if (data && data.length > 0) {
+                    const distanceKm = data[0].distance / 1000;
                     const fee = calculateFee(distanceKm);
                     totalDistanceEl.textContent = `${distanceKm.toFixed(2)} กม.`;
                     shippingFeeEl.textContent = `฿${fee.toFixed(2)}`;
-                },
-                error: () => {
-                    showMessage("ไม่สามารถคำนวณเส้นทางได้", true);
+                } else {
+                     showMessage("ไม่สามารถคำนวณเส้นทางได้", true);
                 }
             });
         }
