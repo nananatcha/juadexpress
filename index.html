@@ -34,7 +34,7 @@
             font-weight: 600;
             border-radius: 0.5rem;
             padding: 0.75rem 1.5rem;
-            transition: background-color 0.3s;
+            transition: background-color: 0.3s;
         }
         .btn-primary:hover {
             background-color: #05a546;
@@ -274,7 +274,7 @@
         let map;
         let currentMapTarget = null;
         let selectedLocation = null;
-        let mapApiLoaded = false;
+        let isMapReady = false;
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -293,9 +293,7 @@
                 addDestination();
                 setDefaultPickupTime();
                 
-                // Show the main content only after everything is ready
                 mainContainer.style.display = 'block';
-
             } catch (error) {
                 console.error("Initialization failed:", error);
                 let errorMessage = "เกิดข้อผิดพลาดในการเริ่มต้นแอป";
@@ -362,7 +360,7 @@
         }
 
         function getCurrentLocation() {
-            showLoading(true, "กำลังค้นหาตำแหน่ง...");
+            showLoading(true);
             if (!navigator.geolocation) { 
                 showMessage("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง", true); 
                 showLoading(false); 
@@ -371,10 +369,20 @@
             navigator.geolocation.getCurrentPosition(
                 position => {
                     const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    getAddressFromCoords(coords, (address) => { 
-                        updateLocationUI('origin', coords, address); 
-                        showLoading(false); 
-                    });
+                    // Ensure map is ready before getting address
+                    if (!map || !isMapReady) {
+                        initMap(() => {
+                            getAddressFromCoords(coords, (address) => { 
+                                updateLocationUI('origin', coords, address); 
+                                showLoading(false); 
+                            });
+                        });
+                    } else {
+                        getAddressFromCoords(coords, (address) => { 
+                            updateLocationUI('origin', coords, address); 
+                            showLoading(false); 
+                        });
+                    }
                 },
                 () => { 
                     showMessage("ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS", true); 
@@ -396,24 +404,36 @@
             selectedLocation = null; 
         }
 
-        function initMap() {
+        function initMap(callback) {
             try {
                 map = new longdo.Map({ 
-                    placeholder: document.getElementById('map'),
-                    zoom: 13,
-                    location: { lat: 13.7563, lon: 100.5018 }
+                    placeholder: document.getElementById('map')
                 });
-                map.Event.bind('click', (e) => {
-                    const location = e.location(); // Correct method to get location from event
-                    const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
-                    map.Overlays.clear(); 
-                    map.Overlays.add(marker); 
-                    map.zoom(16, true);
-                    getAddressFromCoords(location, (address) => { 
-                        selectedLocation = { ...location, address }; 
-                        document.getElementById('selectedMapAddress').textContent = address; 
+                
+                // CRITICAL FIX: Wait for the map to be ready before enabling interactions
+                map.Event.bind('ready', () => {
+                    isMapReady = true;
+                    console.log("Map is ready.");
+                    
+                    // Bind click event only when map is ready
+                    map.Event.bind('click', (e) => {
+                        const location = e.location();
+                        const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
+                        map.Overlays.clear(); 
+                        map.Overlays.add(marker); 
+                        map.zoom(16, true);
+                        getAddressFromCoords(location, (address) => { 
+                            selectedLocation = { ...location, address }; 
+                            document.getElementById('selectedMapAddress').textContent = address; 
+                        });
                     });
+
+                    // Execute callback if provided
+                    if (callback && typeof callback === 'function') {
+                        callback();
+                    }
                 });
+
             } catch (error) {
                 console.error("Map initialization failed:", error);
                 showMessage("ไม่สามารถเปิดแผนที่ได้ กรุณาลองอีกครั้ง", true);
@@ -421,6 +441,10 @@
         }
 
         function searchMap() {
+            if (!isMapReady) {
+                showMessage("แผนที่ยังไม่พร้อมใช้งาน", true);
+                return;
+            }
             const keyword = document.getElementById('mapSearch').value;
             if (!keyword) return;
             map.Search.search(keyword, {
@@ -444,10 +468,9 @@
             });
         }
 
-        // CORRECTED: Using the modern longdo.Search.search for reverse geocoding
         function getAddressFromCoords(coords, callback) {
-            if (typeof longdo === 'undefined' || !longdo.Search) {
-                callback('ไม่สามารถระบุที่อยู่ได้');
+            if (!isMapReady) {
+                callback('แผนที่ยังไม่พร้อม');
                 return;
             }
             map.Search.search(coords, {
@@ -488,8 +511,11 @@
             calculateTotal();
         }
 
-        // CORRECTED: Using the modern map.Route.get for routing
         function calculateTotal() {
+            if (!isMapReady) {
+                console.warn("Map not ready for calculation.");
+                return;
+            }
             const originCoordsStr = document.getElementById('originCoords').value;
             if (!originCoordsStr) return;
 
@@ -509,11 +535,6 @@
                 totalDistanceEl.textContent = '0.00 กม.'; 
                 shippingFeeEl.textContent = '฿0.00'; 
                 return; 
-            }
-
-            if (!map) {
-                // Create a temporary map instance if main one isn't ready
-                map = new longdo.Map({ placeholder: document.createElement('div') });
             }
 
             map.Route.get({
@@ -541,7 +562,7 @@
 
         async function handleFormSubmit(e) {
             e.preventDefault();
-            showLoading(true, "กำลังส่งข้อมูล...");
+            showLoading(true);
             try {
                 const originCoords = document.getElementById('originCoords').value.split(',');
                 const formData = {
@@ -569,9 +590,7 @@
             }
         }
 
-        function showLoading(isLoading, text = 'กำลังโหลด...') { 
-            const loadingTextEl = document.getElementById('loading-text');
-            if (loadingTextEl) loadingTextEl.textContent = text;
+        function showLoading(isLoading) { 
             loadingOverlay.style.display = isLoading ? 'flex' : 'none';
         }
         
