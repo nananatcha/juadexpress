@@ -641,7 +641,7 @@ function initMap() {
                 map.Route.add(route);
 
                 map.Event.bind('click', (e) => {
-                    const location = map.location();
+                    const location = e.location();
                     const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
                     map.Overlays.clear(); 
                     map.Overlays.add(marker); 
@@ -667,7 +667,7 @@ function initMap() {
             addDebugLog(`🔍 Searching map for: ${keyword}`);
             
             try {
-                map.Search.search(keyword, {
+                longdo.Search.search(keyword, {
                     callback: (result) => {
                         if (result.data.length > 0) {
                             const firstResult = result.data[0];
@@ -704,7 +704,7 @@ function initMap() {
             }
             
             try {
-                map.Search.search(coords, {
+                longdo.Geocode.reverse(coords, {
                     callback: (result) => {
                         const address = result.data.length > 0 ? 
                             `${result.data[0].name}, ${result.data[0].address}` : 
