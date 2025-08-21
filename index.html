@@ -34,9 +34,9 @@
             font-weight: 600;
             border-radius: 0.5rem;
             padding: 0.75rem 1.5rem;
-            transition: background-color: 0.3s;
+            transition: background-color 0.3s;
         }
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background-color: #05a546;
         }
         .btn-secondary {
@@ -45,10 +45,14 @@
             font-weight: 500;
             border-radius: 0.5rem;
             padding: 0.5rem 1rem;
-            transition: background-color: 0.3s;
+            transition: background-color 0.3s;
         }
-        .btn-secondary:hover {
+        .btn-secondary:hover:not(:disabled) {
             background-color: #dee2e6;
+        }
+        .btn-primary:disabled, .btn-secondary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         .input-field {
             width: 100%;
@@ -255,7 +259,6 @@
         const GAS_WEB_APP_URL = "YOUR_GOOGLE_APPS_SCRIPT_URL";
 
         // --- DOM ELEMENTS ---
-        const form = document.getElementById('deliveryForm');
         const mainContainer = document.querySelector('.container');
         const senderNameInput = document.getElementById('senderName');
         const pickupTimeInput = document.getElementById('pickupTime');
@@ -268,6 +271,7 @@
         const notificationIcon = document.getElementById('notification-icon');
         const notificationMessage = document.getElementById('notification-message');
         const notificationCloseBtn = document.getElementById('notification-close-btn');
+        const currentLocationBtn = document.getElementById('currentLocationBtn');
 
         // --- STATE VARIABLES ---
         let destinationCounter = 0;
@@ -276,12 +280,16 @@
         let currentMapTarget = null;
         let selectedLocation = null;
         let isMapReady = false;
+        let isBusy = false; // Prevents multiple clicks
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', initializeApp);
 
         async function initializeApp() {
             try {
+                // Pre-initialize map object in the background
+                preloadMap();
+
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) {
                     liff.login();
@@ -306,6 +314,27 @@
                 loadingOverlay.style.display = 'none';
             }
         }
+        
+        function preloadMap() {
+            try {
+                const hiddenMapDiv = document.createElement('div');
+                hiddenMapDiv.id = 'hidden-map';
+                hiddenMapDiv.style.visibility = 'hidden';
+                document.body.appendChild(hiddenMapDiv);
+
+                map = new longdo.Map({ 
+                    placeholder: hiddenMapDiv
+                });
+                
+                map.Event.bind('ready', () => {
+                    isMapReady = true;
+                    route = new longdo.Route({ map: map });
+                    console.log("Map is pre-loaded and ready.");
+                });
+            } catch (error) {
+                console.error("Failed to preload map:", error);
+            }
+        }
 
         function setDefaultPickupTime() {
             const now = new Date();
@@ -320,8 +349,8 @@
 
         function setupEventListeners() {
             addDestinationBtn.addEventListener('click', addDestination);
-            form.addEventListener('submit', handleFormSubmit);
-            document.getElementById('currentLocationBtn').addEventListener('click', getCurrentLocation);
+            document.getElementById('deliveryForm').addEventListener('submit', handleFormSubmit);
+            currentLocationBtn.addEventListener('click', getCurrentLocation);
             document.getElementById('originMapBtn').addEventListener('click', () => openMapModal('origin'));
             document.getElementById('closeMapBtn').addEventListener('click', closeMapModal);
             document.getElementById('confirmLocationBtn').addEventListener('click', confirmLocation);
@@ -361,32 +390,25 @@
         }
 
         function getCurrentLocation() {
-            showLoading(true);
+            if (isBusy) return;
+            setBusy(true, currentLocationBtn, "กำลังค้นหา...");
+
             if (!navigator.geolocation) { 
                 showMessage("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง", true); 
-                showLoading(false); 
+                setBusy(false, currentLocationBtn, "ตำแหน่งปัจจุบัน");
                 return; 
             }
             navigator.geolocation.getCurrentPosition(
                 position => {
                     const coords = { lat: position.coords.latitude, lon: position.coords.longitude };
-                    if (!map || !isMapReady) {
-                        initMap(() => {
-                            getAddressFromCoords(coords, (address) => { 
-                                updateLocationUI('origin', coords, address); 
-                                showLoading(false); 
-                            });
-                        });
-                    } else {
-                        getAddressFromCoords(coords, (address) => { 
-                            updateLocationUI('origin', coords, address); 
-                            showLoading(false); 
-                        });
-                    }
+                    getAddressFromCoords(coords, (address) => { 
+                        updateLocationUI('origin', coords, address); 
+                        setBusy(false, currentLocationBtn, "ตำแหน่งปัจจุบัน");
+                    });
                 },
                 () => { 
                     showMessage("ไม่สามารถดึงตำแหน่งปัจจุบันได้ กรุณาเปิด GPS", true); 
-                    showLoading(false); 
+                    setBusy(false, currentLocationBtn, "ตำแหน่งปัจจุบัน");
                 }
             );
         }
@@ -394,9 +416,23 @@
         function openMapModal(target) { 
             currentMapTarget = target; 
             document.getElementById('mapModal').style.display = 'block'; 
-            if (!map) {
-                initMap();
-            }
+            
+            // Move the preloaded map to the modal
+            const mapContainer = document.getElementById('map');
+            map.placeholder(mapContainer);
+            
+            // Re-bind click event after moving placeholder
+            map.Event.bind('click', (e) => {
+                const location = e.location();
+                const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
+                map.Overlays.clear(); 
+                map.Overlays.add(marker); 
+                map.zoom(16, true);
+                getAddressFromCoords(location, (address) => { 
+                    selectedLocation = { ...location, address }; 
+                    document.getElementById('selectedMapAddress').textContent = address; 
+                });
+            });
         }
 
         function closeMapModal() { 
@@ -405,41 +441,7 @@
             document.getElementById('mapSearch').value = ''; 
             selectedLocation = null; 
         }
-
-        // REWRITTEN: Map Initialization based on official documentation
-        function initMap(onReadyCallback) {
-            try {
-                map = new longdo.Map({ 
-                    placeholder: document.getElementById('map')
-                });
-                
-                map.Event.bind('ready', () => {
-                    isMapReady = true;
-                    console.log("Map is ready and interactive.");
-                    
-                    map.Event.bind('click', (e) => {
-                        const location = e.location();
-                        const marker = new longdo.Marker(location, { title: 'ตำแหน่งที่เลือก' });
-                        map.Overlays.clear(); 
-                        map.Overlays.add(marker); 
-                        map.zoom(16, true);
-                        getAddressFromCoords(location, (address) => { 
-                            selectedLocation = { ...location, address }; 
-                            document.getElementById('selectedMapAddress').textContent = address; 
-                        });
-                    });
-
-                    if (onReadyCallback && typeof onReadyCallback === 'function') {
-                        onReadyCallback();
-                    }
-                });
-
-            } catch (error) {
-                console.error("Map initialization failed:", error);
-                showMessage("ไม่สามารถเปิดแผนที่ได้ กรุณาลองอีกครั้ง", true);
-            }
-        }
-
+        
         function searchMap() {
             if (!isMapReady) {
                 showMessage("แผนที่ยังไม่พร้อมใช้งาน", true);
@@ -468,7 +470,6 @@
             });
         }
 
-        // REWRITTEN: Using longdo.Geocode.reverse for address lookup
         function getAddressFromCoords(coords, callback) {
             if (!isMapReady) {
                 callback('แผนที่ยังไม่พร้อม');
@@ -511,12 +512,9 @@
             calculateTotal();
         }
 
-        // REWRITTEN: Using longdo.Route object for calculation
         function calculateTotal() {
-            if (!isMapReady) {
-                console.warn("Map not ready for calculation.");
-                return;
-            }
+            if (!isMapReady) return;
+
             const originCoordsStr = document.getElementById('originCoords').value;
             if (!originCoordsStr) return;
 
@@ -536,10 +534,6 @@
                 totalDistanceEl.textContent = '0.00 กม.'; 
                 shippingFeeEl.textContent = '฿0.00'; 
                 return; 
-            }
-            
-            if (!route) {
-                route = new longdo.Route({ map: map });
             }
             
             route.clear();
@@ -569,7 +563,9 @@
 
         async function handleFormSubmit(e) {
             e.preventDefault();
-            showLoading(true);
+            if (isBusy) return;
+            setBusy(true);
+
             try {
                 const originCoords = document.getElementById('originCoords').value.split(',');
                 const formData = {
@@ -593,7 +589,7 @@
             } catch (error) {
                 showMessage(error.message || 'เกิดข้อผิดพลาดในการส่งข้อมูล', true);
             } finally {
-                showLoading(false);
+                setBusy(false);
             }
         }
 
@@ -608,6 +604,20 @@
                 '<i class="fas fa-times-circle"></i>' : 
                 '<i class="fas fa-check-circle"></i>';
             notificationModal.classList.add('show');
+        }
+
+        function setBusy(state, button = null, busyText = "กำลังโหลด...") {
+            isBusy = state;
+            if (button) {
+                button.disabled = state;
+                const originalText = button.innerHTML;
+                if (state) {
+                    button.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>${busyText}`;
+                    button.dataset.originalText = originalText;
+                } else {
+                    button.innerHTML = button.dataset.originalText;
+                }
+            }
         }
     </script>
 </body>
